@@ -774,6 +774,10 @@ async function startOnlineGame() {
   // Fetch usernames from room
   const roomSnap = await roomRef.get();
   const rdata    = roomSnap.val() || {};
+
+  // Always sync isRanked from the room data — single source of truth
+  isRanked = rdata.ranked === true;
+
   const hostUser  = rdata.usernameHost  || 'Host';
   const guestUser = rdata.usernameGuest || 'Guest';
   const hostSeat  = rdata.creatorPlayer || 'X';
