@@ -162,11 +162,9 @@ async function quickMatch() {
         continue;
       }
       const roomData = roomSnap.val();
-      const roomAge  = Date.now() - (roomData.createdAt || 0);
-      if (roomData.status !== 'waiting' || roomAge > 30000) {
-        // Stale or already full — purge both room and queue entry
+      if (roomData.status !== 'waiting') {
+        // Room is already full or finished — purge the dead queue entry
         await db.ref('matchmaking/queue/' + sid).remove();
-        await db.ref('rooms/' + entry.roomId).remove();
         continue;
       }
 
@@ -341,9 +339,11 @@ async function joinRoom() {
 
   const snap = await db.ref(`rooms/${code}`).get();
 
-  if (!snap.exists())                { setLobbyError('Room not found. Check the code and try again.'); return; }
-  if (snap.val().players.O === true) { setLobbyError('Room is full — game already in progress.');      return; }
-  if (snap.val().status === 'finished') { setLobbyError('That game has already ended.');               return; }
+  if (!snap.exists()) { setLobbyError('Room not found. Check the code and try again.'); return; }
+  const rdata = snap.val();
+  if (rdata.status === 'finished') { setLobbyError('That game has already ended.'); return; }
+  const hasOpenSeat = rdata.players && (rdata.players.X === false || rdata.players.O === false);
+  if (!hasOpenSeat) { setLobbyError('Room is full — game already in progress.'); return; }
 
   gameMode = 'online';
   await joinAsO(code);
