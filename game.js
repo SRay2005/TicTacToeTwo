@@ -54,7 +54,9 @@ const myPlayerId = localStorage.getItem('ttt2_playerId') || (() => {
 })();
 
 async function hashPassword(password) {
-  const encoded = new TextEncoder().encode(password);
+  // App-level salt — defeats generic rainbow table attacks
+  const salted  = 'ttt2_s4lt_x9q::' + password + '::ttt2_end';
+  const encoded = new TextEncoder().encode(salted);
   const buf     = await crypto.subtle.digest('SHA-256', encoded);
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
