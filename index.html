@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tic Tac Toe Two</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>Tic · Tac · Toe · Two</h1>
+  <p class="subtitle">Ultimate Edition &mdash; Every move matters</p>
+</header>
+
+<div class="scores">
+  <div class="score-box">
+    <div class="score-label">X — Wins</div>
+    <div class="score-val x" id="score-x">0</div>
+  </div>
+  <div class="score-box">
+    <div class="score-label">O — Wins</div>
+    <div class="score-val o" id="score-o">0</div>
+  </div>
+</div>
+
+<div class="status-bar" id="status-bar">
+  <span id="status-content"></span>
+</div>
+
+<div class="outer-grid" id="outer-grid">
+  <svg class="outer-win-overlay" id="outer-win-svg" viewBox="0 0 3 3" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<div class="controls">
+  <button onclick="restartGame()">↺ &nbsp;Restart</button>
+</div>
+
+<p class="hint">
+  YELLOW GLOW = you must play there &nbsp;|&nbsp; Place in a cell to send opponent to that board &nbsp;|&nbsp; Win 3 boards in a row to win
+</p>
+
+<script src="game.js" defer></script>
+</body>
+</html>
