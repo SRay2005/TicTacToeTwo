@@ -12,9 +12,24 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+// ─── ELO / Rating ────────────────────────────────────────────────────────────
+const STARTING_RATING  = 1200;
+const ELO_K            = 32;
+const DRAW_DIFF_THRESH = 200;
+
+function calcEloDelta(myRating, oppRating, outcome) {
+  const expected = 1 / (1 + Math.pow(10, (oppRating - myRating) / 400));
+  return Math.round(ELO_K * (outcome - expected));
+}
+function getOutcome(winner, player) {
+  if (winner === 'D') return 0.5;
+  return winner === player ? 1 : 0;
+}
+
 // ─── Mode ─────────────────────────────────────────────────────────────────────
 // 'online' = Firebase multiplayer   'local' = pass-and-play
 let gameMode = null;
+let isRanked = false;
 
 // ─── Online Session ───────────────────────────────────────────────────────────
 let myPlayer        = null;
@@ -128,6 +143,86 @@ async function initLobby() {
   } else {
     document.getElementById('username-input').focus();
   }
+}
+
+// ─── Player Profile & Rating ─────────────────────────────────────────────────
+async function loadProfile(playerId) {
+  const ref  = db.ref('players/' + playerId);
+  const snap = await ref.get();
+  if (snap.exists()) return snap.val();
+  const fresh = { rating: STARTING_RATING, wins: 0, losses: 0, draws: 0 };
+  await ref.set(fresh);
+  return fresh;
+}
+
+async function settleRating(roomData, winner) {
+  if (!roomData || !roomData.ranked) return null;
+  const settledRef = roomRef.child('ratingSettled');
+  let didSettle = false;
+  await settledRef.transaction(cur => { if (cur) return; didSettle = true; return true; });
+  if (!didSettle) return null;
+  const hostId = roomData.hostId, guestId = roomData.guestId;
+  if (!hostId || !guestId) return null;
+  const hostSeat  = roomData.creatorPlayer || 'X';
+  const guestSeat = hostSeat === 'X' ? 'O' : 'X';
+  const [hostProf, guestProf] = await Promise.all([loadProfile(hostId), loadProfile(guestId)]);
+  const hostOutcome  = getOutcome(winner, hostSeat);
+  const guestOutcome = getOutcome(winner, guestSeat);
+  const ratingDiff   = Math.abs(hostProf.rating - guestProf.rating);
+  let hostDelta  = calcEloDelta(hostProf.rating,  guestProf.rating, hostOutcome);
+  let guestDelta = calcEloDelta(guestProf.rating, hostProf.rating,  guestOutcome);
+  if (winner === 'D' && ratingDiff < DRAW_DIFF_THRESH) { hostDelta = 0; guestDelta = 0; }
+  const upd = {};
+  upd['players/' + hostId  + '/rating']   = Math.max(0, hostProf.rating  + hostDelta);
+  upd['players/' + hostId  + '/wins']     = hostProf.wins   + (hostOutcome  === 1   ? 1 : 0);
+  upd['players/' + hostId  + '/losses']   = hostProf.losses + (hostOutcome  === 0   ? 1 : 0);
+  upd['players/' + hostId  + '/draws']    = hostProf.draws  + (hostOutcome  === 0.5 ? 1 : 0);
+  upd['players/' + hostId  + '/username'] = roomData.usernameHost  || '';
+  upd['players/' + guestId + '/rating']   = Math.max(0, guestProf.rating + guestDelta);
+  upd['players/' + guestId + '/wins']     = guestProf.wins   + (guestOutcome === 1   ? 1 : 0);
+  upd['players/' + guestId + '/losses']   = guestProf.losses + (guestOutcome === 0   ? 1 : 0);
+  upd['players/' + guestId + '/draws']    = guestProf.draws  + (guestOutcome === 0.5 ? 1 : 0);
+  upd['players/' + guestId + '/username'] = roomData.usernameGuest || '';
+  await db.ref().update(upd);
+  if (myPlayerId === hostId)  return hostDelta;
+  if (myPlayerId === guestId) return guestDelta;
+  return null;
+}
+
+function showRatingDelta(delta) {
+  if (delta === null || delta === undefined) return;
+  const el = document.getElementById('end-rating-delta');
+  el.classList.remove('hidden','gain','loss','none');
+  if (delta === 0) { el.textContent = 'Rating unchanged'; el.classList.add('none'); }
+  else { el.textContent = (delta > 0 ? '+' : '') + delta + ' pts'; el.classList.add(delta > 0 ? 'gain' : 'loss'); }
+}
+
+// ─── Leaderboard ──────────────────────────────────────────────────────────────
+function openLB()    { document.getElementById('lb-modal').classList.remove('hidden'); fetchLeaderboard(); }
+function closeLBBtn(){ document.getElementById('lb-modal').classList.add('hidden'); }
+function closeLB(e)  { if (e.target === document.getElementById('lb-modal')) closeLBBtn(); }
+
+async function fetchLeaderboard() {
+  const listEl = document.getElementById('lb-list');
+  listEl.innerHTML = '<div class="lb-loading">Loading...</div>';
+  const snap = await db.ref('players').orderByChild('rating').limitToLast(20).get();
+  if (!snap.exists()) { listEl.innerHTML = '<div class="lb-loading">No players yet.</div>'; return; }
+  const rows = [];
+  snap.forEach(child => { rows.push({ id: child.key, ...child.val() }); });
+  rows.sort((a, b) => (b.rating||0) - (a.rating||0));
+  listEl.innerHTML = '';
+  rows.forEach((p, i) => {
+    const rank = i + 1, isMe = p.id === myPlayerId;
+    const rankCls = rank===1?'top1':rank===2?'top2':rank===3?'top3':'';
+    const row = document.createElement('div');
+    row.className = 'lb-row' + (isMe ? ' me' : '');
+    row.innerHTML =
+      '<span class="lb-col-rank ' + rankCls + '">' + rank + '</span>' +
+      '<span class="lb-col-name">' + (isMe?'★ ':'') + (p.username||'Unknown') + '</span>' +
+      '<span class="lb-col-rating">' + (p.rating||STARTING_RATING) + '</span>' +
+      '<span class="lb-col-record"><span class="w">'+(p.wins||0)+'W</span> '+(p.draws||0)+'D <span class="l">'+(p.losses||0)+'L</span></span>';
+    listEl.appendChild(row);
+  });
 }
 
 // ─── Inactivity Timer ────────────────────────────────────────────────────────
@@ -291,6 +386,7 @@ function showLobbyPanel(panelId) {
 async function quickMatch() {
   setLobbyError('');
   gameMode = 'online';
+  isRanked = true;
   showLobbyPanel('lobby-searching');
 
   // Pre-create our own room in case we end up hosting
@@ -309,7 +405,11 @@ async function quickMatch() {
   };
 
   // Write the room first so it exists before we advertise it
+  const hostProfile = await loadProfile(myPlayerId);
   myRoomData.usernameHost = myUsername;
+  myRoomData.hostId       = myPlayerId;
+  myRoomData.hostRating   = hostProfile.rating;
+  myRoomData.ranked       = true;
   await db.ref('rooms/' + myRoomId).set(myRoomData);
   db.ref('rooms/' + myRoomId).onDisconnect().remove();
 
@@ -353,6 +453,9 @@ async function quickMatch() {
     await roomRef.child('players/' + joinerSeat).set(true);
     await roomRef.child('status').set('playing');
     await roomRef.child('usernameGuest').set(myUsername);
+    const guestProfile = await loadProfile(myPlayerId);
+    await roomRef.child('guestId').set(myPlayerId);
+    await roomRef.child('guestRating').set(guestProfile.rating);
     roomRef.child('players/' + joinerSeat).onDisconnect().set(false);
 
     startOnlineGame();
@@ -399,6 +502,7 @@ async function cancelMatchmaking() {
 async function createRoom() {
   setLobbyError('');
   gameMode = 'online';
+  isRanked = false;
   roomId   = generateRoomId();
   roomRef  = db.ref(`rooms/${roomId}`);
   // Randomly assign creator to X or O
@@ -455,6 +559,9 @@ async function joinRoom() {
   await roomRef.child('players/' + joinerSeat).set(true);
   await roomRef.child('status').set('playing');
   await roomRef.child('usernameGuest').set(myUsername);
+  const guestProf = await loadProfile(myPlayerId);
+  await roomRef.child('guestId').set(myPlayerId);
+  await roomRef.child('guestRating').set(guestProf.rating);
   roomRef.child('players/' + joinerSeat).onDisconnect().set(false);
 
   startOnlineGame();
@@ -518,10 +625,16 @@ async function startOnlineGame() {
   names[guestSeat] = guestUser;
 
   document.getElementById('pc-name-x').textContent = names.X;
-  document.getElementById('pc-name-o').textContent = names.Y || names.O || '—';
   document.getElementById('pc-name-o').textContent = names.O;
   document.getElementById('score-x').textContent = '0';
   document.getElementById('score-o').textContent = '0';
+  if (rdata.ranked) {
+    document.getElementById('pc-rating-' + hostSeat.toLowerCase()).textContent  = (rdata.hostRating  || STARTING_RATING) + ' pts';
+    document.getElementById('pc-rating-' + guestSeat.toLowerCase()).textContent = (rdata.guestRating || STARTING_RATING) + ' pts';
+  } else {
+    document.getElementById('pc-rating-x').textContent = 'Unranked';
+    document.getElementById('pc-rating-o').textContent = 'Unranked';
+  }
 
   buildGrid();
 
@@ -728,6 +841,7 @@ function renderStatus() {
   if (outerWinner === 'D') {
     el.innerHTML = `<span class="win-banner" style="color:#888">DRAW</span>`;
     showEndOverlay('draw');
+    if (gameMode === 'online') roomRef.get().then(s => settleRating(s.val(),'D').then(d => showRatingDelta(d)));
     return;
   }
 
@@ -740,6 +854,7 @@ function renderStatus() {
       const youWon = outerWinner === myPlayer;
       el.innerHTML = `<span class="win-banner" style="color:${col}">${youWon ? 'YOU WIN!' : 'OPPONENT WINS!'}</span>`;
       showEndOverlay(youWon ? 'win' : 'loss');
+      roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d)));
     }
     return;
   }
@@ -842,6 +957,8 @@ function applyMove(b, c) {
 async function restartGame() {
   hideEndOverlay();
   clearInactivityTimer();
+  const deltaEl = document.getElementById('end-rating-delta');
+  if (deltaEl) deltaEl.classList.add('hidden');
   // Clear forfeit flag so new game is clean
   if (gameMode === 'online' && roomRef) await roomRef.child('forfeit').remove();
   document.body.style.setProperty('--bg-tint', 'transparent');

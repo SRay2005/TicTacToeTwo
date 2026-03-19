@@ -41,6 +41,23 @@
     </div>
   </div>
 
+  <!-- ── Leaderboard Modal ────────────────────────────────────────── -->
+  <div id="lb-modal" class="modal-backdrop hidden" onclick="closeLB(event)">
+    <div class="modal-box lb-modal-box">
+      <button class="modal-close" onclick="closeLBBtn()">✕</button>
+      <h2 class="modal-title">🏆 Leaderboard</h2>
+      <div class="lb-header-row">
+        <span class="lb-col-rank">Rank</span>
+        <span class="lb-col-name">Player</span>
+        <span class="lb-col-rating">Rating</span>
+        <span class="lb-col-record">W / D / L</span>
+      </div>
+      <div id="lb-list" class="lb-list">
+        <div class="lb-loading">Loading...</div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Lobby Screen ───────────────────────────────────────────────── -->
   <div id="lobby-screen">
     <button class="htp-trigger" onclick="openHTP()">? How to Play</button>
@@ -87,6 +104,10 @@
           <p class="lobby-hint-small">Two players on the same device</p>
         </div>
 
+        <div class="mode-divider"></div>
+
+        <button class="lobby-btn leaderboard-btn" onclick="openLB()">🏆 &nbsp;Leaderboard</button>
+
         <p id="lobby-error" class="lobby-error"></p>
       </div>
 
@@ -127,6 +148,7 @@
           <div class="pc-info">
             <div class="pc-name" id="pc-name-x">—</div>
             <div class="pc-wins"><span id="score-x">0</span> wins</div>
+            <div class="pc-rating" id="pc-rating-x"></div>
           </div>
         </div>
 
@@ -136,6 +158,7 @@
           <div class="pc-info">
             <div class="pc-name" id="pc-name-o">—</div>
             <div class="pc-wins"><span id="score-o">0</span> wins</div>
+            <div class="pc-rating" id="pc-rating-o"></div>
           </div>
         </div>
       </div>
@@ -184,6 +207,7 @@ Your move sends opponent to that board</p>
         <div id="end-icon" class="end-icon"></div>
         <div id="end-title" class="end-title"></div>
         <div id="end-subtitle" class="end-subtitle"></div>
+        <div id="end-rating-delta" class="end-rating-delta hidden"></div>
         <div class="end-actions">
           <button id="end-newgame-btn" onclick="restartGame()">↺ &nbsp;New Game</button>
           <button onclick="leaveRoom()">⌂ &nbsp;Home</button>
