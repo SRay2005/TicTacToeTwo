@@ -437,16 +437,26 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 
 /* ── Mobile (< 900px) ─────────────────────────────────────────────────────── */
 @media (max-width: 899px) {
-  body { padding: 8px; justify-content: flex-start; }
+  body {
+    padding: 6px;
+    justify-content: flex-start;
+    height: 100dvh;
+    overflow: hidden;
+  }
 
-  #game-screen { height: 100dvh; overflow: hidden; justify-content: flex-start; }
+  #game-screen {
+    height: 100dvh;
+    overflow: hidden;
+    justify-content: space-between; /* spread items to fill height evenly, no dead space */
+  }
 
   .game-layout {
     flex-direction: column;
-    gap: 6px;
+    gap: 0;
     width: 100%;
     height: 100%;
-    justify-content: flex-start;
+    justify-content: space-between; /* distribute vertically */
+    padding-bottom: 4px;
   }
 
   /* Top row: both player cards side by side */
@@ -456,82 +466,84 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
     gap: 6px;
     width: 100%;
     flex-shrink: 0;
+    padding: 4px 0;
   }
   .game-panel-left .panel-title { display: none; }
 
   .player-card {
     flex: 1;
     max-width: 48%;
-    padding: 8px 10px;
+    padding: 7px 10px;
     gap: 6px;
   }
 
-  .pc-symbol { font-size: 1.4rem; }
-  .pc-name   { font-size: 0.65rem; max-width: 90px; }
-  .pc-wins   { font-size: 0.52rem; }
+  .pc-symbol { font-size: 1.3rem; }
+  .pc-name   { font-size: 0.62rem; max-width: 90px; }
+  .pc-wins   { font-size: 0.5rem; }
 
   /* Room code below both player cards, full width */
   .room-info-bar {
     text-align: center;
-    font-size: 0.52rem;
-    padding: 4px 8px;
+    font-size: 0.5rem;
+    padding: 3px 8px;
     width: 100%;
     flex-shrink: 0;
-    order: 2; /* sits after the left panel row */
   }
 
   /* Force both player cards to always be visible */
   #player-card-x,
-  #player-card-o {
-    display: flex !important;
-  }
+  #player-card-o { display: flex !important; }
 
   /* Status bar compact */
   .status-bar {
-    padding: 7px 12px;
+    padding: 6px 10px;
     min-width: unset;
     width: 100%;
     flex-shrink: 0;
   }
 
-  .player-indicator { font-size: 0.65rem; }
+  .player-indicator { font-size: 0.62rem; }
+  .win-banner { font-size: 1.1rem; }
 
-  /* Board: fill remaining space, never overflow */
+  /* Board center: grow to fill but use only what it needs */
   .game-center {
-    gap: 6px;
+    gap: 4px;
     width: 100%;
-    flex-shrink: 1;
+    flex-shrink: 0;
     align-items: center;
   }
 
-  /* Auto-size cells so board fits in available width */
-  :root { --cell-size: clamp(26px, 9.5vw, 40px); }
+  /* Cell size: derived from viewport width, board has 3 inner grids × 3 cells + gaps
+     Formula: (100vw - 12px body padding - 14px outer padding - 6 inner-board gaps)
+              / (9 cells + 6 inner gaps per row + outer gaps)
+     Keep it simple: clamp to fit ~97vw */
+  :root { --cell-size: clamp(24px, 8.8vw, 38px); }
 
-  .outer-grid { gap: 5px; padding: 7px; }
-  .inner-board { padding: 4px; }
+  .outer-grid { gap: 4px; padding: 6px; }
+  .inner-board { padding: 3px; }
   .cell-grid { gap: 2px; }
+  .board-overlay-symbol { font-size: 2.2rem; }
 
-  .board-overlay-symbol { font-size: 2.4rem; }
-
+  /* Hint: barely visible, just occupies minimal space */
   .hint {
-    font-size: 0.5rem;
-    line-height: 1.5;
-    color: #2a2a2a;
+    font-size: 0.48rem;
+    line-height: 1.4;
+    color: #252525;
     flex-shrink: 0;
+    text-align: center;
   }
 
-  /* Right panel: buttons in a row at the bottom */
+  /* Right panel: buttons row at the bottom */
   .game-panel-right { order: 99; width: 100%; flex-shrink: 0; }
   .controls-vertical { flex-direction: row; justify-content: center; gap: 8px; }
-  .controls-vertical button { width: auto; font-size: 0.62rem; padding: 7px 16px; }
+  .controls-vertical button { width: auto; font-size: 0.6rem; padding: 7px 14px; }
 
-  /* HTP button repositioned so it doesn't overlap */
-  .htp-trigger { bottom: 10px; right: 10px; font-size: 0.54rem; padding: 5px 9px; }
+  .htp-trigger { bottom: 8px; right: 8px; font-size: 0.52rem; padding: 5px 8px; }
 }
 
-/* ── Very small phones (< 390px) ─────────────────────────────────────────── */
-@media (max-width: 389px) {
-  :root { --cell-size: clamp(24px, 8.5vw, 34px); }
-  .lobby-box { padding: 24px 16px; }
-  .room-code { font-size: 2rem; }
+/* ── Very small phones (< 380px) ─────────────────────────────────────────── */
+@media (max-width: 379px) {
+  :root { --cell-size: clamp(22px, 8.2vw, 30px); }
+  .lobby-box { padding: 20px 14px; }
+  .room-code { font-size: 1.8rem; }
 }
