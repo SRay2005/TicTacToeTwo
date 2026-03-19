@@ -130,6 +130,54 @@ async function initLobby() {
   }
 }
 
+// ─── Inactivity Timer ────────────────────────────────────────────────────────
+const INACTIVITY_LIMIT = 120; // seconds
+let inactivityInterval = null;
+let inactivitySecsLeft = INACTIVITY_LIMIT;
+
+function startInactivityTimer() {
+  clearInactivityTimer();
+  if (gameMode !== 'online' || outerWinner) return;
+
+  inactivitySecsLeft = INACTIVITY_LIMIT;
+  const bar   = document.getElementById('inactivity-bar');
+  const fill  = document.getElementById('inactivity-fill');
+  const label = document.getElementById('inactivity-label');
+  const cd    = document.getElementById('inactivity-countdown');
+
+  bar.classList.remove('hidden');
+  fill.style.width = '100%';
+  fill.classList.remove('urgent');
+  label.classList.remove('urgent');
+
+  inactivityInterval = setInterval(async () => {
+    inactivitySecsLeft--;
+    const pct = (inactivitySecsLeft / INACTIVITY_LIMIT) * 100;
+    fill.style.width = pct + '%';
+    cd.textContent = inactivitySecsLeft;
+
+    const urgent = inactivitySecsLeft <= 30;
+    fill.classList.toggle('urgent', urgent);
+    label.classList.toggle('urgent', urgent);
+
+    if (inactivitySecsLeft <= 0) {
+      clearInactivityTimer();
+      // The active player timed out — write a forfeit flag to Firebase
+      // Only the current player's opponent should trigger this to avoid double-write
+      if (currentPlayer !== myPlayer) {
+        // It's the opponent's turn and they timed out — we declare win
+        await roomRef.child('forfeit').set({ loser: currentPlayer, ts: Date.now() });
+      }
+    }
+  }, 1000);
+}
+
+function clearInactivityTimer() {
+  if (inactivityInterval) { clearInterval(inactivityInterval); inactivityInterval = null; }
+  const bar = document.getElementById('inactivity-bar');
+  if (bar) bar.classList.add('hidden');
+}
+
 // ─── Game State ───────────────────────────────────────────────────────────────
 const WINS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
@@ -421,6 +469,7 @@ async function cancelRoom() {
 // ─── Leave ────────────────────────────────────────────────────────────────────
 async function leaveRoom() {
   hideEndOverlay();
+  clearInactivityTimer();
   document.body.style.setProperty('--bg-tint', 'transparent');
   detachListeners();
 
@@ -488,6 +537,8 @@ async function startOnlineGame() {
     if (!snap.exists()) return;
     deserializeGame(snap.val());
     render();
+    if (!outerWinner) startInactivityTimer();
+    else clearInactivityTimer();
   });
 
   scoresListener = roomRef.child('scores').on('value', snap => {
@@ -503,9 +554,28 @@ async function startOnlineGame() {
     const players  = snap.val();
     const opponent = myPlayer === 'X' ? 'O' : 'X';
     if (players[opponent] === false && !outerWinner) {
+      clearInactivityTimer();
       showEndOverlay('oppleft');
     }
   });
+
+  // Forfeit listener — inactivity timeout
+  roomRef.child('forfeit').on('value', snap => {
+    if (!snap.exists()) return;
+    const { loser } = snap.val();
+    if (!outerWinner) {
+      clearInactivityTimer();
+      outerWinner = loser === 'X' ? 'O' : 'X'; // winner is the other player
+      if (myPlayer === outerWinner) {
+        showEndOverlay('win', 'Opponent ran out of time!');
+      } else {
+        showEndOverlay('loss', 'You ran out of time.');
+      }
+    }
+  });
+
+  // Start timer immediately
+  startInactivityTimer();
 }
 
 // ─── Build DOM ────────────────────────────────────────────────────────────────
@@ -723,7 +793,12 @@ async function handleClick(b, c) {
     await roomRef.child('game').set(serializeGame({
       boards, boardWinner, outerWinner, activeBoard, currentPlayer, moveCount
     }));
-    if (outerWinner) await roomRef.child('scores').set(scores);
+    if (outerWinner) {
+      await roomRef.child('scores').set(scores);
+      clearInactivityTimer();
+    } else {
+      startInactivityTimer(); // reset timer after each move
+    }
   } else {
     // Local — just re-render
     render();
@@ -766,6 +841,9 @@ function applyMove(b, c) {
 // ─── Restart ──────────────────────────────────────────────────────────────────
 async function restartGame() {
   hideEndOverlay();
+  clearInactivityTimer();
+  // Clear forfeit flag so new game is clean
+  if (gameMode === 'online' && roomRef) await roomRef.child('forfeit').remove();
   document.body.style.setProperty('--bg-tint', 'transparent');
   if (gameMode === 'local') {
     resetGameState();

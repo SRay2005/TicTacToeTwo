@@ -151,6 +151,14 @@
           <span id="status-content"></span>
         </div>
 
+        <!-- Inactivity timer bar (online only) -->
+        <div id="inactivity-bar" class="inactivity-bar hidden">
+          <div class="inactivity-label" id="inactivity-label">Move in <span id="inactivity-countdown">120</span>s</div>
+          <div class="inactivity-track">
+            <div class="inactivity-fill" id="inactivity-fill"></div>
+          </div>
+        </div>
+
         <div class="outer-grid" id="outer-grid">
           <svg class="outer-win-overlay" id="outer-win-svg" viewBox="0 0 3 3" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
@@ -164,6 +172,7 @@ Your move sends opponent to that board</p>
         <div class="controls-vertical">
           <button onclick="restartGame()">↺ New Game</button>
           <button onclick="leaveRoom()">⌂ Home</button>
+          <button class="htp-mobile-btn" onclick="openHTP()">? How to Play</button>
         </div>
       </div>
 
