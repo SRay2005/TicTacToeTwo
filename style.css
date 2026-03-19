@@ -393,7 +393,7 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 .cell.just-placed .cell-symbol { animation:placePop 0.22s ease-out forwards; display:inline-block; }
 
 /* ── Hint ────────────────────────────────────────────────────────────────── */
-.hint { font-size:0.58rem; color:#333; letter-spacing:0.1em; text-align:center; max-width:420px; line-height:1.8; }
+.hint { font-size:0.58rem; color:#333; letter-spacing:0.1em; text-align:center; max-width:420px; line-height:1.8; white-space: pre-line; }
 
 /* ── Win line ────────────────────────────────────────────────────────────── */
 .outer-win-overlay { position:absolute; inset:0; pointer-events:none; z-index:10; }
@@ -422,6 +422,19 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 .end-actions { display:flex; gap:10px; justify-content:center; }
 
 /* ── Mobile adjustments ──────────────────────────────────────────────────── */
+/* Room info bar standalone (outside panel) */
+@media (min-width: 900px) {
+  /* On desktop: position it underneath the left panel via grid/flex ordering */
+  .game-layout {
+    flex-wrap: wrap;
+    align-content: center;
+  }
+  .game-panel-left  { order: 1; }
+  .game-center      { order: 2; }
+  .game-panel-right { order: 3; }
+  .room-info-bar    { order: 4; flex-basis: 200px; width: 200px; margin-top: -200px; /* pull up beside center */ align-self: flex-end; }
+}
+
 /* ── Mobile (< 900px) ─────────────────────────────────────────────────────── */
 @media (max-width: 899px) {
   body { padding: 8px; justify-content: flex-start; }
@@ -457,13 +470,20 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
   .pc-name   { font-size: 0.65rem; max-width: 90px; }
   .pc-wins   { font-size: 0.52rem; }
 
-  /* Room code inline under player cards */
+  /* Room code below both player cards, full width */
   .room-info-bar {
     text-align: center;
     font-size: 0.52rem;
     padding: 4px 8px;
     width: 100%;
     flex-shrink: 0;
+    order: 2; /* sits after the left panel row */
+  }
+
+  /* Force both player cards to always be visible */
+  #player-card-x,
+  #player-card-o {
+    display: flex !important;
   }
 
   /* Status bar compact */
