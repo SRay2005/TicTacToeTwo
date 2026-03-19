@@ -317,8 +317,13 @@ async function showRatingDelta(delta) {
   if (delta === 0) { el.textContent = 'Rating unchanged'; el.classList.add('none'); }
   else { el.textContent = (delta > 0 ? '+' : '') + delta + ' pts'; el.classList.add(delta > 0 ? 'gain' : 'loss'); }
 
-  // Also refresh the lobby username chip rating immediately
+  // Refresh lobby badge and my player card immediately
   refreshLobbyRating();
+  if (myPlayer) {
+    const profile = await loadProfile(myPlayerId);
+    const myCard  = document.getElementById('pc-rating-' + myPlayer.toLowerCase());
+    if (myCard) myCard.textContent = (profile.rating || STARTING_RATING) + ' pts';
+  }
 }
 
 async function refreshLobbyRating() {
@@ -816,6 +821,26 @@ async function startOnlineGame() {
     const btn = document.getElementById('end-newgame-btn');
     if (btn) { btn.textContent = '↺  New Game'; btn.disabled = false; }
     hideEndOverlay();
+
+    // Clear win line and refresh ratings when a fresh game starts
+    if (!outerWinner) {
+      document.getElementById('outer-win-svg').innerHTML = '';
+      setIngameNewGameVisible(!isRanked);
+      if (isRanked) {
+        roomRef.get().then(async snap => {
+          if (!snap.exists()) return;
+          const rd = snap.val();
+          if (!rd.hostId || !rd.guestId) return;
+          const hSeat = (rd.creatorPlayer || 'X').toLowerCase();
+          const gSeat = hSeat === 'x' ? 'o' : 'x';
+          const [hProf, gProf] = await Promise.all([loadProfile(rd.hostId), loadProfile(rd.guestId)]);
+          const hEl = document.getElementById('pc-rating-' + hSeat);
+          const gEl = document.getElementById('pc-rating-' + gSeat);
+          if (hEl) hEl.textContent = (hProf.rating || STARTING_RATING) + ' pts';
+          if (gEl) gEl.textContent = (gProf.rating || STARTING_RATING) + ' pts';
+        });
+      }
+    }
 
     render();
     if (!outerWinner) startInactivityTimer(gameData.lastMoveAt || Date.now());
