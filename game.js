@@ -127,168 +127,108 @@ function showLobbyPanel(panelId) {
 }
 
 // ─── Quick Match ──────────────────────────────────────────────────────────────
-let mmQueueListener = null; // active listener reference so we can detach it
+// Strategy: single atomic transaction on matchmaking/pending.
+//   - If slot is empty  → write our roomId, become the host, wait for joiner.
+//   - If slot has entry → take that roomId, clear the slot, join as guest.
+// This means only ONE device ever writes to pending at a time, so there is
+// no possible race condition between two simultaneous entrants.
 
 async function quickMatch() {
   setLobbyError('');
   gameMode = 'online';
   showLobbyPanel('lobby-searching');
 
-  // Step 0 — purge any stale entries (older than 60s) from previous sessions
-  const allSnap = await db.ref('matchmaking/queue').get();
-  if (allSnap.exists()) {
-    const purgeOps = [];
-    allSnap.forEach(child => {
-      const age = Date.now() - (child.val().timestamp || 0);
-      if (age > 60000) purgeOps.push(db.ref('matchmaking/queue/' + child.key).remove());
-    });
-    await Promise.all(purgeOps);
-  }
+  // Pre-create our own room in case we end up hosting
+  const myRoomId    = generateRoomId();
+  const hostPlayer  = Math.random() < 0.5 ? 'X' : 'O';
+  const guestPlayer = hostPlayer === 'X' ? 'O' : 'X';
 
-  // Step 1 — scan for anyone already waiting
-  const snap = await db.ref('matchmaking/queue').get();
-  if (snap.exists()) {
-    const entries = Object.entries(snap.val());
-    // Sort oldest-first so we match the longest-waiting player
-    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-    for (const [sid, entry] of entries) {
-      const age = Date.now() - entry.timestamp;
-      if (sid === mySessionId || age > 60000) continue;
-
-      // Verify the room actually exists, is still open, and is fresh (< 30s)
-      const roomSnap = await db.ref('rooms/' + entry.roomId).get();
-      if (!roomSnap.exists()) {
-        await db.ref('matchmaking/queue/' + sid).remove();
-        continue;
-      }
-      const roomData = roomSnap.val();
-      if (roomData.status !== 'waiting') {
-        // Room is already full or finished — purge the dead queue entry
-        await db.ref('matchmaking/queue/' + sid).remove();
-        continue;
-      }
-
-      const claimed = await claimQueueSlot(sid);
-      if (claimed) {
-        await joinAsO(entry.roomId);
-        return; // matched — done
-      }
-    }
-  }
-
-  // Step 2 — nobody waiting yet, create a room and add ourselves to the queue
-  roomId   = generateRoomId();
-  roomRef  = db.ref(`rooms/${roomId}`);
-  myPlayer = Math.random() < 0.5 ? 'X' : 'O';
-  const joinerSeat = myPlayer === 'X' ? 'O' : 'X';
-
-  await roomRef.set({
-    players:       { [myPlayer]: true, [joinerSeat]: false },
-    creatorPlayer: myPlayer,
+  const myRoomData = {
+    players:       { [hostPlayer]: true, [guestPlayer]: false },
+    creatorPlayer: hostPlayer,
     game:          serializeGame(initialGameState()),
     scores:        { X: 0, O: 0 },
     status:        'waiting',
     mode:          'matchmaking',
     createdAt:     Date.now()
-  });
-  roomRef.onDisconnect().remove();
+  };
 
-  myQueueRef = db.ref(`matchmaking/queue/${mySessionId}`);
-  await myQueueRef.set({ roomId, timestamp: Date.now() });
-  myQueueRef.onDisconnect().remove();
+  // Write the room first so it exists before we advertise it
+  await db.ref('rooms/' + myRoomId).set(myRoomData);
+  db.ref('rooms/' + myRoomId).onDisconnect().remove();
 
-  // Step 3 — listen for OTHER people joining the queue after us.
-  // This fixes the race condition where both devices enter simultaneously
-  // and both read an empty queue — each will now detect the other's entry.
-  mmQueueListener = db.ref('matchmaking/queue').on('child_added', async (childSnap) => {
-    const sid   = childSnap.key;
-    const entry = childSnap.val();
-    if (sid === mySessionId) return; // that's us
-    if (!myQueueRef) return;         // already matched
+  // Atomic transaction: grab someone else's room OR advertise ours
+  const pendingRef = db.ref('matchmaking/pending');
+  let theirRoomId  = null;
 
-    const age = Date.now() - entry.timestamp;
-    if (age > 120000) return; // stale
-
-    const claimed = await claimQueueSlot(sid);
-    if (claimed) {
-      // We claimed them — stop listening, clean up our queue entry, join their room
-      stopMmQueueListener();
-      cleanupMyQueueEntry();
-      // Remove the room we created since we're joining theirs instead
-      if (roomRef) { roomRef.onDisconnect().cancel(); await roomRef.remove(); roomRef = null; }
-      await joinAsO(entry.roomId);
+  await pendingRef.transaction(current => {
+    if (current === null) {
+      // Nobody waiting — advertise our room
+      return { roomId: myRoomId, sessionId: mySessionId, ts: Date.now() };
+    } else {
+      // Someone is waiting — grab their room and clear the slot
+      theirRoomId = current.roomId;
+      return null;
     }
   });
 
-  // Step 4 — also watch for someone joining our room directly
-  roomRef.child(`players/${joinerSeat}`).on('value', snap => {
-    if (snap.val() === true) {
-      roomRef.child(`players/${joinerSeat}`).off();
-      stopMmQueueListener();
-      cleanupMyQueueEntry();
-      startOnlineGame();
+  if (theirRoomId) {
+    // ── We are the GUEST ──────────────────────────────────────────────────
+    // Clean up the room we pre-created since we won't need it
+    db.ref('rooms/' + myRoomId).onDisconnect().cancel();
+    await db.ref('rooms/' + myRoomId).remove();
+
+    // Join the host's room
+    const snap = await db.ref('rooms/' + theirRoomId).get();
+    if (!snap.exists() || snap.val().status !== 'waiting') {
+      // Host's room is gone — clear pending and try again fresh
+      await pendingRef.remove();
+      await quickMatch();
+      return;
     }
-  });
-}
 
-function stopMmQueueListener() {
-  if (mmQueueListener) {
-    db.ref('matchmaking/queue').off('child_added', mmQueueListener);
-    mmQueueListener = null;
+    const data = snap.val();
+    let joinerSeat = data.players.X === false ? 'X' : 'O';
+
+    roomId   = theirRoomId;
+    roomRef  = db.ref('rooms/' + roomId);
+    myPlayer = joinerSeat;
+
+    await roomRef.child('players/' + joinerSeat).set(true);
+    await roomRef.child('status').set('playing');
+    roomRef.child('players/' + joinerSeat).onDisconnect().set(false);
+
+    startOnlineGame();
+
+  } else {
+    // ── We are the HOST ───────────────────────────────────────────────────
+    roomId   = myRoomId;
+    roomRef  = db.ref('rooms/' + roomId);
+    myPlayer = hostPlayer;
+    myQueueRef = pendingRef; // reuse myQueueRef so cancelMatchmaking cleans it up
+
+    // Watch for the guest to join our room
+    roomRef.child('players/' + guestPlayer).on('value', snap => {
+      if (snap.val() === true) {
+        roomRef.child('players/' + guestPlayer).off();
+        if (myQueueRef) {
+          myQueueRef.onDisconnect().cancel();
+          // Don't remove pending here — guest already cleared it via transaction
+          myQueueRef = null;
+        }
+        startOnlineGame();
+      }
+    });
   }
-}
-
-function cleanupMyQueueEntry() {
-  if (myQueueRef) {
-    myQueueRef.onDisconnect().cancel();
-    myQueueRef.remove();
-    myQueueRef = null;
-  }
-}
-
-async function claimQueueSlot(sessionId) {
-  const slotRef = db.ref(`matchmaking/queue/${sessionId}`);
-  let claimed   = false;
-  await slotRef.transaction(current => {
-    if (current === null) return; // already claimed — abort
-    claimed = true;
-    return null; // delete the entry
-  });
-  return claimed;
-}
-
-async function joinAsO(targetRoomId) {
-  const snap = await db.ref(`rooms/${targetRoomId}`).get();
-  if (!snap.exists()) { await quickMatch(); return; }
-
-  const data = snap.val();
-
-  // Find whichever seat is open — don't trust creatorPlayer calculation
-  let joinerSeat = null;
-  if (data.players.X === false) joinerSeat = 'X';
-  else if (data.players.O === false) joinerSeat = 'O';
-
-  if (!joinerSeat) {
-    // Both seats are taken — this room is full, try again
-    await quickMatch();
-    return;
-  }
-
-  roomId   = targetRoomId;
-  roomRef  = db.ref(`rooms/${roomId}`);
-  myPlayer = joinerSeat;
-
-  await roomRef.child(`players/${joinerSeat}`).set(true);
-  await roomRef.child('status').set('playing');
-  roomRef.child(`players/${joinerSeat}`).onDisconnect().set(false);
-
-  // Always call startOnlineGame — we successfully joined
-  startOnlineGame();
 }
 
 async function cancelMatchmaking() {
-  stopMmQueueListener();
-  cleanupMyQueueEntry();
+  // Clear the pending slot if we are the host
+  if (myQueueRef) {
+    myQueueRef.onDisconnect().cancel();
+    await myQueueRef.remove();
+    myQueueRef = null;
+  }
   if (roomRef) {
     roomRef.onDisconnect().cancel();
     await roomRef.remove();
