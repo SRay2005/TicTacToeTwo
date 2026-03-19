@@ -68,14 +68,43 @@
       </div>
       <p class="subtitle">The Ultimate Tic-Tac-Toe</p>
 
-      <!-- Username prompt (shown first) -->
+      <!-- Step 1: username -->
       <div id="lobby-username">
         <div class="username-prompt">
           <div class="mode-label" style="margin-bottom:12px">What's your name?</div>
           <input id="username-input" type="text" placeholder="ENTER USERNAME" maxlength="16"
-            onkeydown="if(event.key==='Enter') confirmUsername()" autocomplete="off" />
-          <button class="lobby-btn primary" style="width:100%;margin-top:10px" onclick="confirmUsername()">Let's Play →</button>
+            onkeydown="if(event.key==='Enter') checkUsername()" autocomplete="off" />
+          <button class="lobby-btn primary" style="width:100%;margin-top:10px" onclick="checkUsername()">Continue →</button>
           <p id="username-error" class="lobby-error"></p>
+        </div>
+      </div>
+
+      <!-- Step 2a: new user — set a password -->
+      <div id="lobby-set-password" class="hidden">
+        <div class="username-prompt">
+          <div class="auth-username-chip" id="auth-name-chip"></div>
+          <div class="mode-label" style="margin-bottom:6px">Choose a password</div>
+          <p class="lobby-hint-small" style="margin-bottom:12px">You'll need this to log in from other devices</p>
+          <input id="set-password-input" type="password" placeholder="SET PASSWORD" maxlength="64"
+            onkeydown="if(event.key==='Enter') submitSetPassword()" autocomplete="new-password" class="auth-input" />
+          <input id="set-password-confirm" type="password" placeholder="CONFIRM PASSWORD" maxlength="64"
+            onkeydown="if(event.key==='Enter') submitSetPassword()" autocomplete="new-password" class="auth-input" style="margin-top:8px" />
+          <button class="lobby-btn primary" style="width:100%;margin-top:10px" onclick="submitSetPassword()">Create Account →</button>
+          <button class="lobby-btn" style="width:100%;margin-top:6px;font-size:0.6rem" onclick="backToUsername()">← Back</button>
+          <p id="set-password-error" class="lobby-error"></p>
+        </div>
+      </div>
+
+      <!-- Step 2b: existing user — enter password to log in -->
+      <div id="lobby-login-password" class="hidden">
+        <div class="username-prompt">
+          <div class="auth-username-chip" id="auth-login-chip"></div>
+          <div class="mode-label" style="margin-bottom:6px">Enter your password</div>
+          <input id="login-password-input" type="password" placeholder="PASSWORD" maxlength="64"
+            onkeydown="if(event.key==='Enter') submitLogin()" autocomplete="current-password" class="auth-input" />
+          <button class="lobby-btn primary" style="width:100%;margin-top:10px" onclick="submitLogin()">Log In →</button>
+          <button class="lobby-btn" style="width:100%;margin-top:6px;font-size:0.6rem" onclick="backToUsername()">← Back</button>
+          <p id="login-error" class="lobby-error"></p>
         </div>
       </div>
 

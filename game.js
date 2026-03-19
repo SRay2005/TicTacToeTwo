@@ -46,76 +46,179 @@ let myUsername = localStorage.getItem('ttt2_username') || '';
 // names[player] e.g. names['X'] = 'Alice'
 let names = { X: '—', O: '—' };
 
-// Unique username: stored at Firebase path usernames/{name} = playerId
-// On claim: write only if it doesn't exist yet (transaction).
-// On re-use: allow if stored playerId matches ours (same player returning).
-
+// ─── Auth helpers ────────────────────────────────────────────────────────────
 const myPlayerId = localStorage.getItem('ttt2_playerId') || (() => {
   const id = 'uid_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
   localStorage.setItem('ttt2_playerId', id);
   return id;
 })();
 
-async function confirmUsername() {
-  const val = document.getElementById('username-input').value.trim();
+async function hashPassword(password) {
+  const encoded = new TextEncoder().encode(password);
+  const buf     = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function nameKey(name) {
+  return name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+}
+
+// Pending state across the two-step auth flow
+let pendingUsername = '';
+
+// ── Step 1: check if username exists ─────────────────────────────────────────
+async function checkUsername() {
+  const val   = document.getElementById('username-input').value.trim();
   const errEl = document.getElementById('username-error');
   errEl.textContent = '';
 
-  if (!val) { errEl.textContent = 'Please enter a username.'; return; }
-  if (val.length < 2) { errEl.textContent = 'Username must be at least 2 characters.'; return; }
+  if (!val)          { errEl.textContent = 'Please enter a username.'; return; }
+  if (val.length < 2){ errEl.textContent = 'At least 2 characters please.'; return; }
 
-  // If same as current username, just go straight to lobby
-  if (val === myUsername) {
-    showLobbyMain(val);
-    return;
-  }
-
-  errEl.textContent = 'Checking availability...';
-  const btn = document.querySelector('#lobby-username .lobby-btn');
+  errEl.textContent = 'Checking...';
+  const btn = document.querySelector('#lobby-username .lobby-btn.primary');
   btn.disabled = true;
 
-  const nameKey = val.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-  const nameRef = db.ref('usernames/' + nameKey);
+  pendingUsername = val;
+  const key  = nameKey(val);
+  const snap = await db.ref('usernames/' + key).get();
+  btn.disabled = false;
+  errEl.textContent = '';
 
+  if (!snap.exists()) {
+    // Brand new username — ask them to set a password
+    document.getElementById('auth-name-chip').textContent = val;
+    document.getElementById('set-password-input').value   = '';
+    document.getElementById('set-password-confirm').value = '';
+    document.getElementById('set-password-error').textContent = '';
+    document.getElementById('lobby-username').classList.add('hidden');
+    document.getElementById('lobby-set-password').classList.remove('hidden');
+    document.getElementById('set-password-input').focus();
+
+  } else if (snap.val().playerId === myPlayerId) {
+    // Same device — auto-login (no password needed)
+    await claimUsername(val, null, snap.val().passwordHash);
+
+  } else {
+    // Taken by someone else — offer login
+    document.getElementById('auth-login-chip').textContent = val;
+    document.getElementById('login-password-input').value  = '';
+    document.getElementById('login-error').textContent     = '';
+    document.getElementById('lobby-username').classList.add('hidden');
+    document.getElementById('lobby-login-password').classList.remove('hidden');
+    document.getElementById('login-password-input').focus();
+  }
+}
+
+// ── Step 2a: new user sets a password ────────────────────────────────────────
+async function submitSetPassword() {
+  const pw1   = document.getElementById('set-password-input').value;
+  const pw2   = document.getElementById('set-password-confirm').value;
+  const errEl = document.getElementById('set-password-error');
+  errEl.textContent = '';
+
+  if (!pw1)        { errEl.textContent = 'Please choose a password.'; return; }
+  if (pw1.length < 4) { errEl.textContent = 'Password must be at least 4 characters.'; return; }
+  if (pw1 !== pw2) { errEl.textContent = 'Passwords do not match.'; return; }
+
+  const btn  = document.querySelector('#lobby-set-password .lobby-btn.primary');
+  btn.disabled = true;
+  errEl.textContent = 'Creating account...';
+
+  const hash = await hashPassword(pw1);
+  const key  = nameKey(pendingUsername);
+  const ref  = db.ref('usernames/' + key);
+
+  // Transaction — ensure nobody else grabbed it while we were on this screen
   let taken = false;
-  await nameRef.transaction(current => {
-    if (current === null) {
-      // Available — claim it
-      return { playerId: myPlayerId, display: val };
-    } else if (current.playerId === myPlayerId) {
-      // Already owned by this player (case change etc) — update display
-      return { playerId: myPlayerId, display: val };
-    } else {
-      // Taken by someone else
-      taken = true;
-      return; // abort
-    }
+  await ref.transaction(current => {
+    if (current !== null) { taken = true; return; }
+    return { playerId: myPlayerId, display: pendingUsername, passwordHash: hash };
   });
 
   btn.disabled = false;
 
   if (taken) {
-    errEl.textContent = 'That username is taken. Try another!';
+    errEl.textContent = 'That username was just taken. Try another.';
+    setTimeout(backToUsername, 1500);
     return;
   }
 
-  // Release old username if changed
-  if (myUsername && myUsername !== val) {
-    const oldKey = myUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    const oldRef = db.ref('usernames/' + oldKey);
-    const oldSnap = await oldRef.get();
-    if (oldSnap.exists() && oldSnap.val().playerId === myPlayerId) {
-      await oldRef.remove();
-    }
+  await finishLogin(pendingUsername);
+}
+
+// ── Step 2b: existing user logs in with password ──────────────────────────────
+async function submitLogin() {
+  const pw    = document.getElementById('login-password-input').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+
+  if (!pw) { errEl.textContent = 'Please enter your password.'; return; }
+
+  const btn = document.querySelector('#lobby-login-password .lobby-btn.primary');
+  btn.disabled = true;
+  errEl.textContent = 'Checking...';
+
+  const key  = nameKey(pendingUsername);
+  const snap = await db.ref('usernames/' + key).get();
+
+  if (!snap.exists()) {
+    // Username vanished — just claim it fresh
+    btn.disabled = false;
+    errEl.textContent = '';
+    await checkUsername();
+    return;
   }
 
-  myUsername = val;
-  localStorage.setItem('ttt2_username', myUsername);
-  showLobbyMain(val);
+  const hash      = await hashPassword(pw);
+  const storedHash = snap.val().passwordHash;
+
+  if (hash !== storedHash) {
+    btn.disabled = false;
+    errEl.textContent = 'Incorrect password. Try again.';
+    return;
+  }
+
+  // Password correct — transfer ownership to this device
+  await db.ref('usernames/' + key).update({ playerId: myPlayerId });
+  btn.disabled = false;
+  await finishLogin(pendingUsername);
+}
+
+// ── Finish: save locally, release old username, go to lobby ──────────────────
+async function finishLogin(name) {
+  // Release old username if different
+  if (myUsername && myUsername !== name) {
+    const oldKey  = nameKey(myUsername);
+    const oldSnap = await db.ref('usernames/' + oldKey).get();
+    if (oldSnap.exists() && oldSnap.val().playerId === myPlayerId) {
+      await db.ref('usernames/' + oldKey).remove();
+    }
+  }
+  myUsername = name;
+  localStorage.setItem('ttt2_username', name);
+  showLobbyMain(name);
+}
+
+async function claimUsername(name, newHash, existingHash) {
+  const key = nameKey(name);
+  if (newHash) {
+    await db.ref('usernames/' + key).set({ playerId: myPlayerId, display: name, passwordHash: newHash });
+  }
+  await finishLogin(name);
+}
+
+function backToUsername() {
+  ['lobby-set-password','lobby-login-password'].forEach(id =>
+    document.getElementById(id).classList.add('hidden'));
+  document.getElementById('lobby-username').classList.remove('hidden');
+  document.getElementById('username-error').textContent = '';
+  pendingUsername = '';
 }
 
 function showLobbyMain(name) {
-  document.getElementById('lobby-username').classList.add('hidden');
+  ['lobby-username','lobby-set-password','lobby-login-password'].forEach(id =>
+    document.getElementById(id).classList.add('hidden'));
   document.getElementById('lobby-main').classList.remove('hidden');
   document.getElementById('username-display').textContent = name;
 }
@@ -125,23 +228,22 @@ function changeUsername() {
   document.getElementById('lobby-username').classList.remove('hidden');
   document.getElementById('username-input').value = myUsername;
   document.getElementById('username-error').textContent = '';
+  pendingUsername = '';
 }
 
 async function initLobby() {
   if (myUsername) {
-    // Verify our username is still ours in Firebase (could have been cleared)
-    const nameKey = myUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    const snap = await db.ref('usernames/' + nameKey).get();
+    const key  = nameKey(myUsername);
+    const snap = await db.ref('usernames/' + key).get();
     if (snap.exists() && snap.val().playerId === myPlayerId) {
       showLobbyMain(myUsername);
     } else {
-      // Someone else claimed it while we were away — ask for a new one
       myUsername = '';
       localStorage.removeItem('ttt2_username');
-      document.getElementById('username-input').focus();
+      setTimeout(() => document.getElementById('username-input').focus(), 100);
     }
   } else {
-    document.getElementById('username-input').focus();
+    setTimeout(() => document.getElementById('username-input').focus(), 100);
   }
 }
 

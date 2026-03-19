@@ -119,6 +119,32 @@ body::after {
 .legend-dot.glow  { border: 2px solid var(--active-glow); box-shadow: 0 0 6px rgba(255,224,102,0.4); }
 .legend-dot.faint { border: 2px solid rgba(255,224,102,0.35); }
 
+/* ── Auth inputs ─────────────────────────────────────────────────────────── */
+.auth-input {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 11px 14px;
+  border-radius: 3px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+.auth-input::placeholder { color: #333; font-size: 0.68rem; letter-spacing: 0.12em; }
+.auth-input:focus { border-color: var(--active-glow); }
+
+.auth-username-chip {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.4rem;
+  letter-spacing: 0.15em;
+  color: var(--active-glow);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
 /* ── Lobby ───────────────────────────────────────────────────────────────── */
 #lobby-screen {
   display: flex; align-items: center; justify-content: center; width: 100%;
@@ -179,7 +205,7 @@ body::after {
 .join-row input:focus { border-color: var(--o-color); }
 
 /* Username display chip */
-/* username-display moved above */
+/* username-display (moved above in rating section) */
 
 /* Buttons */
 button {
