@@ -10,6 +10,17 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
+
+// ─── App Check (reCAPTCHA v3) ─────────────────────────────────────────────────
+// REPLACE the string below with your reCAPTCHA v3 SITE KEY from:
+// https://www.google.com/recaptcha/admin
+// It looks like: 6Lc_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+const appCheck = firebase.appCheck();
+appCheck.activate(
+  '6LcKcJAsAAAAAP9YRIEkDqvKdns254wjUO45zUh9', // <── PASTE YOUR SITE KEY HERE
+  true // auto-refresh tokens
+);
+
 const db = firebase.database();
 
 // ─── ELO / Rating ────────────────────────────────────────────────────────────
