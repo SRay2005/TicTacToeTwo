@@ -134,13 +134,35 @@ async function quickMatch() {
   gameMode = 'online';
   showLobbyPanel('lobby-searching');
 
+  // Step 0 — purge any stale entries (older than 60s) from previous sessions
+  const allSnap = await db.ref('matchmaking/queue').get();
+  if (allSnap.exists()) {
+    const purgeOps = [];
+    allSnap.forEach(child => {
+      const age = Date.now() - (child.val().timestamp || 0);
+      if (age > 60000) purgeOps.push(db.ref('matchmaking/queue/' + child.key).remove());
+    });
+    await Promise.all(purgeOps);
+  }
+
   // Step 1 — scan for anyone already waiting
   const snap = await db.ref('matchmaking/queue').get();
   if (snap.exists()) {
     const entries = Object.entries(snap.val());
+    // Sort oldest-first so we match the longest-waiting player
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
     for (const [sid, entry] of entries) {
       const age = Date.now() - entry.timestamp;
-      if (sid === mySessionId || age > 120000) continue;
+      if (sid === mySessionId || age > 60000) continue;
+
+      // Verify the room actually exists and is still open before claiming
+      const roomSnap = await db.ref('rooms/' + entry.roomId + '/status').get();
+      if (!roomSnap.exists() || roomSnap.val() !== 'waiting') {
+        // Room is gone or already full — remove the dead queue entry
+        await db.ref('matchmaking/queue/' + sid).remove();
+        continue;
+      }
+
       const claimed = await claimQueueSlot(sid);
       if (claimed) {
         await joinAsO(entry.roomId);
