@@ -18,8 +18,11 @@
 
       <!-- Main lobby actions -->
       <div id="lobby-main">
+        <button class="lobby-btn quickmatch" onclick="quickMatch()">⚡ &nbsp;Quick Match</button>
+        <p class="lobby-hint-small">Play instantly with a random opponent</p>
+        <div class="lobby-divider">— or play with a friend —</div>
         <button class="lobby-btn primary" onclick="createRoom()">Create Room</button>
-        <div class="lobby-divider">— or —</div>
+        <div class="lobby-or">or</div>
         <div class="join-row">
           <input id="join-input" type="text" placeholder="ENTER CODE" maxlength="6" />
           <button class="lobby-btn" onclick="joinRoom()">Join</button>
@@ -27,7 +30,16 @@
         <p id="lobby-error" class="lobby-error"></p>
       </div>
 
-      <!-- Waiting for opponent -->
+      <!-- Searching for opponent (matchmaking) -->
+      <div id="lobby-searching" class="hidden">
+        <div class="searching-icon">⚡</div>
+        <p class="waiting-label">Finding an opponent</p>
+        <p class="waiting-dots">Searching<span class="dots"></span></p>
+        <p class="waiting-sub">You'll be matched as soon as someone else joins</p>
+        <button class="lobby-btn small" onclick="cancelMatchmaking()">Cancel</button>
+      </div>
+
+      <!-- Waiting for friend (private room) -->
       <div id="lobby-waiting" class="hidden">
         <p class="waiting-label">Room Code</p>
         <div id="room-code-display" class="room-code"></div>

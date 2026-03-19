@@ -70,6 +70,7 @@ body::before {
   margin-bottom: 6px;
 }
 
+/* Buttons */
 .lobby-btn {
   font-family: 'Space Mono', monospace;
   font-size: 0.72rem;
@@ -92,6 +93,34 @@ body::before {
   background: #1e1e1e;
 }
 
+/* Quick Match — the hero button */
+.lobby-btn.quickmatch {
+  width: 100%;
+  padding: 15px;
+  font-size: 0.85rem;
+  border-color: var(--x-color);
+  color: var(--x-color);
+  background: rgba(255,77,77,0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.lobby-btn.quickmatch:hover {
+  background: rgba(255,77,77,0.12);
+  border-color: var(--x-color);
+  color: var(--x-color);
+  box-shadow: 0 0 20px rgba(255,77,77,0.15);
+}
+
+.lobby-hint-small {
+  font-size: 0.58rem;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  margin-top: 7px;
+  margin-bottom: 0;
+}
+
+/* Create room */
 .lobby-btn.primary {
   border-color: var(--active-glow);
   color: var(--active-glow);
@@ -102,6 +131,8 @@ body::before {
 
 .lobby-btn.primary:hover {
   background: rgba(255,224,102,0.07);
+  border-color: var(--active-glow);
+  color: var(--active-glow);
 }
 
 .lobby-btn.small {
@@ -111,9 +142,16 @@ body::before {
 
 .lobby-divider {
   color: var(--muted);
-  font-size: 0.65rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  margin: 20px 0 16px;
+}
+
+.lobby-or {
+  color: var(--muted);
+  font-size: 0.6rem;
   letter-spacing: 0.15em;
-  margin: 18px 0;
+  margin: 10px 0;
 }
 
 .join-row {
@@ -155,7 +193,19 @@ body::before {
   margin-top: 12px;
 }
 
-/* Waiting state */
+/* ── Searching state ─────────────────────────────────────────────────────── */
+.searching-icon {
+  font-size: 2.4rem;
+  margin-bottom: 14px;
+  animation: searchPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes searchPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50%       { opacity: 1;   transform: scale(1.1); }
+}
+
+/* ── Waiting state ───────────────────────────────────────────────────────── */
 .waiting-label {
   font-size: 0.6rem;
   letter-spacing: 0.2em;
@@ -180,8 +230,9 @@ body::before {
 .waiting-sub {
   font-size: 0.62rem;
   color: var(--muted);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   margin-bottom: 20px;
+  line-height: 1.6;
 }
 
 .waiting-dots {

@@ -1,6 +1,4 @@
 // ─── Firebase Config ──────────────────────────────────────────────────────────
-// Replace ALL values below with your own from the Firebase console.
-// See README for setup instructions.
 const firebaseConfig = {
   apiKey:            "AIzaSyAJGS3EgK-lyMj_QNpyiOrw8hnxj_gtNSY",
   authDomain:        "tictactoetwo-0501.firebaseapp.com",
@@ -15,12 +13,16 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-let myPlayer  = null;   // 'X' or 'O' — assigned when joining a room
-let roomId    = null;
-let roomRef   = null;
+let myPlayer         = null;   // 'X' or 'O'
+let roomId           = null;
+let roomRef          = null;
+let myQueueRef       = null;   // ref to this player's spot in the matchmaking queue
 let gameListener     = null;
 let scoresListener   = null;
 let playersListener  = null;
+
+// Stable ID for this browser session (survives page interactions, resets on close)
+const mySessionId = Math.random().toString(36).slice(2);
 
 // ─── Game State ───────────────────────────────────────────────────────────────
 const WINS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
@@ -35,23 +37,21 @@ let moveCount   = 0;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function generateRoomId() {
-  // No ambiguous characters (0/O, 1/I/L)
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
 function initialGameState() {
   return {
-    boards:       Array.from({ length: 9 }, () => Array(9).fill(null)),
-    boardWinner:  Array(9).fill(null),
-    outerWinner:  null,
-    activeBoard:  -1,
-    currentPlayer:'X',
-    moveCount:    0
+    boards:        Array.from({ length: 9 }, () => Array(9).fill(null)),
+    boardWinner:   Array(9).fill(null),
+    outerWinner:   null,
+    activeBoard:   -1,
+    currentPlayer: 'X',
+    moveCount:     0
   };
 }
 
-// Firebase can't store JS arrays reliably, so we serialize them as JSON strings.
 function serializeGame(state) {
   return {
     boards:        JSON.stringify(state.boards),
@@ -76,38 +76,170 @@ function setLobbyError(msg) {
   document.getElementById('lobby-error').textContent = msg;
 }
 
-// ─── Create Room ──────────────────────────────────────────────────────────────
+function showLobbyPanel(panelId) {
+  ['lobby-main', 'lobby-searching', 'lobby-waiting'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+  });
+  document.getElementById(panelId).classList.remove('hidden');
+}
+
+// ─── Quick Match (Matchmaking) ────────────────────────────────────────────────
+// Strategy:
+//   The Firebase path `matchmaking/queue` holds entries keyed by sessionId.
+//   Each entry: { roomId, timestamp }
+//   When a player enters:
+//     1. Scan the queue for an existing entry that isn't theirs.
+//     2. If found → join that person's room as O, remove them from queue.
+//     3. If not found → create a room as X, add yourself to the queue, wait.
+
+async function quickMatch() {
+  setLobbyError('');
+  showLobbyPanel('lobby-searching');
+
+  const queueRef = db.ref('matchmaking/queue');
+
+  // Look for someone already waiting
+  const snap = await queueRef.orderByChild('timestamp').limitToFirst(10).get();
+
+  let foundMatch = false;
+
+  if (snap.exists()) {
+    const entries = snap.val();
+    for (const [sid, entry] of Object.entries(entries)) {
+      // Skip stale entries (older than 2 minutes) and our own
+      const age = Date.now() - entry.timestamp;
+      if (sid === mySessionId || age > 120000) continue;
+
+      // Try to atomically claim this slot
+      const claimed = await claimQueueSlot(sid, entry.roomId);
+      if (claimed) {
+        foundMatch = true;
+        // Join the room that person created
+        await joinAsO(entry.roomId);
+        break;
+      }
+    }
+  }
+
+  if (!foundMatch) {
+    // No one waiting — create a room and add ourselves to the queue
+    roomId   = generateRoomId();
+    roomRef  = db.ref(`rooms/${roomId}`);
+    myPlayer = 'X';
+
+    await roomRef.set({
+      players: { X: true, O: false },
+      game:    serializeGame(initialGameState()),
+      scores:  { X: 0, O: 0 },
+      status:  'waiting',
+      mode:    'matchmaking'
+    });
+
+    // Auto-clean room on disconnect
+    roomRef.onDisconnect().remove();
+
+    // Add to matchmaking queue; auto-remove on disconnect
+    myQueueRef = db.ref(`matchmaking/queue/${mySessionId}`);
+    await myQueueRef.set({ roomId, timestamp: Date.now() });
+    myQueueRef.onDisconnect().remove();
+
+    // Watch for O joining
+    roomRef.child('players/O').on('value', snap => {
+      if (snap.val() === true) {
+        roomRef.child('players/O').off();
+        // Clean up our queue entry since we got matched
+        if (myQueueRef) {
+          myQueueRef.onDisconnect().cancel();
+          myQueueRef.remove();
+          myQueueRef = null;
+        }
+        startGame();
+      }
+    });
+  }
+}
+
+// Atomically remove a queue entry — returns true if we were first to claim it
+async function claimQueueSlot(sessionId, targetRoomId) {
+  const slotRef = db.ref(`matchmaking/queue/${sessionId}`);
+  let claimed = false;
+
+  await slotRef.transaction(current => {
+    if (current === null) return; // already claimed by someone else — abort
+    claimed = true;
+    return null; // delete it
+  });
+
+  return claimed;
+}
+
+async function joinAsO(targetRoomId) {
+  const snap = await db.ref(`rooms/${targetRoomId}`).get();
+
+  if (!snap.exists() || snap.val().players.O === true) {
+    // Room vanished or was already filled — go back to searching
+    await quickMatch();
+    return;
+  }
+
+  roomId   = targetRoomId;
+  roomRef  = db.ref(`rooms/${roomId}`);
+  myPlayer = 'O';
+
+  await roomRef.child('players/O').set(true);
+  await roomRef.child('status').set('playing');
+  roomRef.child('players/O').onDisconnect().set(false);
+
+  startGame();
+}
+
+async function cancelMatchmaking() {
+  // Remove from queue if we were waiting
+  if (myQueueRef) {
+    myQueueRef.onDisconnect().cancel();
+    await myQueueRef.remove();
+    myQueueRef = null;
+  }
+  // Delete the room we may have created
+  if (roomRef) {
+    roomRef.onDisconnect().cancel();
+    await roomRef.remove();
+    roomRef = null;
+  }
+  roomId   = null;
+  myPlayer = null;
+  showLobbyPanel('lobby-main');
+}
+
+// ─── Create Private Room ──────────────────────────────────────────────────────
 async function createRoom() {
   setLobbyError('');
-  roomId    = generateRoomId();
-  roomRef   = db.ref(`rooms/${roomId}`);
-  myPlayer  = 'X';
+  roomId   = generateRoomId();
+  roomRef  = db.ref(`rooms/${roomId}`);
+  myPlayer = 'X';
 
   await roomRef.set({
     players: { X: true, O: false },
     game:    serializeGame(initialGameState()),
     scores:  { X: 0, O: 0 },
-    status:  'waiting'
+    status:  'waiting',
+    mode:    'private'
   });
 
-  // Auto-delete this room when the creator disconnects
   roomRef.onDisconnect().remove();
 
-  // Show waiting screen
-  document.getElementById('lobby-main').classList.add('hidden');
-  document.getElementById('lobby-waiting').classList.remove('hidden');
+  showLobbyPanel('lobby-waiting');
   document.getElementById('room-code-display').textContent = roomId;
 
-  // Watch for opponent joining
   roomRef.child('players/O').on('value', snap => {
     if (snap.val() === true) {
-      roomRef.child('players/O').off(); // stop watching
+      roomRef.child('players/O').off();
       startGame();
     }
   });
 }
 
-// ─── Join Room ────────────────────────────────────────────────────────────────
+// ─── Join Private Room ────────────────────────────────────────────────────────
 async function joinRoom() {
   setLobbyError('');
   const code = document.getElementById('join-input').value.trim().toUpperCase();
@@ -135,21 +267,10 @@ async function joinRoom() {
     return;
   }
 
-  roomId   = code;
-  roomRef  = db.ref(`rooms/${roomId}`);
-  myPlayer = 'O';
-
-  // Register as player O and mark game as active
-  await roomRef.child('players/O').set(true);
-  await roomRef.child('status').set('playing');
-
-  // Remove O from room on disconnect, which triggers opponent notification
-  roomRef.child('players/O').onDisconnect().set(false);
-
-  startGame();
+  await joinAsO(code);
 }
 
-// ─── Cancel (before opponent joins) ──────────────────────────────────────────
+// ─── Cancel Private Room ──────────────────────────────────────────────────────
 async function cancelRoom() {
   if (roomRef) {
     roomRef.onDisconnect().cancel();
@@ -158,12 +279,10 @@ async function cancelRoom() {
   roomRef  = null;
   roomId   = null;
   myPlayer = null;
-
-  document.getElementById('lobby-main').classList.remove('hidden');
-  document.getElementById('lobby-waiting').classList.add('hidden');
+  showLobbyPanel('lobby-main');
 }
 
-// ─── Leave mid-game ───────────────────────────────────────────────────────────
+// ─── Leave Mid-game ───────────────────────────────────────────────────────────
 async function leaveRoom() {
   detachListeners();
 
@@ -178,8 +297,7 @@ async function leaveRoom() {
 
   document.getElementById('game-screen').classList.add('hidden');
   document.getElementById('lobby-screen').classList.remove('hidden');
-  document.getElementById('lobby-main').classList.remove('hidden');
-  document.getElementById('lobby-waiting').classList.add('hidden');
+  showLobbyPanel('lobby-main');
   document.getElementById('join-input').value = '';
   setLobbyError('');
 }
@@ -202,14 +320,12 @@ function startGame() {
 
   buildGrid();
 
-  // Listen for game state changes
   gameListener = roomRef.child('game').on('value', snap => {
     if (!snap.exists()) return;
     deserializeGame(snap.val());
     render();
   });
 
-  // Listen for score changes
   scoresListener = roomRef.child('scores').on('value', snap => {
     if (!snap.exists()) return;
     const s = snap.val();
@@ -218,10 +334,9 @@ function startGame() {
     document.getElementById('score-o').textContent = scores.O;
   });
 
-  // Listen for opponent disconnect
   playersListener = roomRef.child('players').on('value', snap => {
     if (!snap.exists()) return;
-    const players = snap.val();
+    const players  = snap.val();
     const opponent = myPlayer === 'X' ? 'O' : 'X';
     if (players[opponent] === false && !outerWinner) {
       document.getElementById('status-content').innerHTML =
@@ -232,7 +347,7 @@ function startGame() {
 
 // ─── Build DOM ────────────────────────────────────────────────────────────────
 function buildGrid() {
-  const svg      = document.getElementById('outer-win-svg');
+  const svg       = document.getElementById('outer-win-svg');
   const outerGrid = document.getElementById('outer-grid');
   outerGrid.innerHTML = '';
   outerGrid.appendChild(svg);
@@ -269,7 +384,7 @@ function buildGrid() {
 // ─── Render ───────────────────────────────────────────────────────────────────
 function render() {
   for (let b = 0; b < 9; b++) {
-    const boardEl  = document.getElementById(`board-${b}`);
+    const boardEl = document.getElementById(`board-${b}`);
     boardEl.className = 'inner-board';
 
     const finished = boardWinner[b] !== null;
@@ -348,18 +463,15 @@ function renderStatus() {
 
 // ─── Game Logic ───────────────────────────────────────────────────────────────
 async function handleClick(b, c) {
-  // Guards
-  if (outerWinner)              return; // game over
-  if (currentPlayer !== myPlayer) return; // not your turn
-  if (boardWinner[b] !== null)  return; // board already won
-  if (boards[b][c] !== null)    return; // cell taken
-  if (activeBoard !== -1 && activeBoard !== b) return; // wrong board
+  if (outerWinner)                             return;
+  if (currentPlayer !== myPlayer)              return;
+  if (boardWinner[b] !== null)                 return;
+  if (boards[b][c] !== null)                   return;
+  if (activeBoard !== -1 && activeBoard !== b) return;
 
-  // Apply move locally
   boards[b][c] = currentPlayer;
   moveCount++;
 
-  // Check inner board result
   const innerWin = checkWinner(boards[b]);
   if (innerWin) {
     boardWinner[b] = innerWin;
@@ -367,7 +479,6 @@ async function handleClick(b, c) {
     boardWinner[b] = 'D';
   }
 
-  // Check outer board result
   const outerWin = checkWinner(boardWinner.map(w => w === 'D' ? null : w));
   if (outerWin) {
     outerWinner = outerWin;
@@ -383,27 +494,23 @@ async function handleClick(b, c) {
     }
   }
 
-  // Advance turn
   if (!outerWinner) {
     activeBoard   = boardWinner[c] !== null ? -1 : c;
     currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
   }
 
-  // Push to Firebase — the opponent's listener will pick this up
   await roomRef.child('game').set(serializeGame({
     boards, boardWinner, outerWinner, activeBoard, currentPlayer, moveCount
   }));
 }
 
-// ─── Restart (both players reset) ────────────────────────────────────────────
+// ─── Restart ──────────────────────────────────────────────────────────────────
 async function restartGame() {
   if (!roomRef) return;
   await roomRef.child('game').set(serializeGame(initialGameState()));
-  // Scores are kept across rounds — reset them explicitly if you want:
-  // await roomRef.child('scores').set({ X: 0, O: 0 });
 }
 
-// ─── Win helpers ──────────────────────────────────────────────────────────────
+// ─── Win Helpers ──────────────────────────────────────────────────────────────
 function checkWinner(cells) {
   for (const [a, b, c] of WINS) {
     if (cells[a] && cells[a] === cells[b] && cells[a] === cells[c]) return cells[a];
@@ -444,7 +551,7 @@ function getWinLineCoords(cells) {
   return null;
 }
 
-// ─── Waiting dots animation ───────────────────────────────────────────────────
+// ─── Dots Animation ───────────────────────────────────────────────────────────
 let dotCount = 0;
 setInterval(() => {
   const el = document.querySelector('.dots');
