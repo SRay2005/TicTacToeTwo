@@ -9,38 +9,82 @@
 </head>
 <body>
 
-<header>
-  <h1>Tic · Tac · Toe · Two</h1>
-  <p class="subtitle">Ultimate Edition &mdash; Every move matters</p>
-</header>
+  <!-- ── Lobby Screen ───────────────────────────────────────────────── -->
+  <div id="lobby-screen">
+    <div class="lobby-box">
 
-<div class="scores">
-  <div class="score-box">
-    <div class="score-label">X — Wins</div>
-    <div class="score-val x" id="score-x">0</div>
+      <h1>Tic · Tac · Toe · Two</h1>
+      <p class="subtitle">Online Multiplayer</p>
+
+      <!-- Main lobby actions -->
+      <div id="lobby-main">
+        <button class="lobby-btn primary" onclick="createRoom()">Create Room</button>
+        <div class="lobby-divider">— or —</div>
+        <div class="join-row">
+          <input id="join-input" type="text" placeholder="ENTER CODE" maxlength="6" />
+          <button class="lobby-btn" onclick="joinRoom()">Join</button>
+        </div>
+        <p id="lobby-error" class="lobby-error"></p>
+      </div>
+
+      <!-- Waiting for opponent -->
+      <div id="lobby-waiting" class="hidden">
+        <p class="waiting-label">Room Code</p>
+        <div id="room-code-display" class="room-code"></div>
+        <p class="waiting-sub">Share this code with your opponent</p>
+        <p class="waiting-dots">Waiting for opponent<span class="dots"></span></p>
+        <button class="lobby-btn small" onclick="cancelRoom()">Cancel</button>
+      </div>
+
+    </div>
   </div>
-  <div class="score-box">
-    <div class="score-label">O — Wins</div>
-    <div class="score-val o" id="score-o">0</div>
+
+  <!-- ── Game Screen ────────────────────────────────────────────────── -->
+  <div id="game-screen" class="hidden">
+
+    <header>
+      <h1>Tic · Tac · Toe · Two</h1>
+      <p class="subtitle">Ultimate Edition &mdash; Every move matters</p>
+    </header>
+
+    <div class="room-info-bar">
+      <span id="room-info-label"></span>
+      <span id="my-player-label"></span>
+      <button class="lobby-btn small" onclick="leaveRoom()">Leave</button>
+    </div>
+
+    <div class="scores">
+      <div class="score-box">
+        <div class="score-label">X — Wins</div>
+        <div class="score-val x" id="score-x">0</div>
+      </div>
+      <div class="score-box">
+        <div class="score-label">O — Wins</div>
+        <div class="score-val o" id="score-o">0</div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <span id="status-content"></span>
+    </div>
+
+    <div class="outer-grid" id="outer-grid">
+      <svg class="outer-win-overlay" id="outer-win-svg" viewBox="0 0 3 3" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+
+    <div class="controls">
+      <button onclick="restartGame()">↺ &nbsp;New Game</button>
+    </div>
+
+    <p class="hint">
+      YELLOW GLOW = you must play there &nbsp;|&nbsp; Your move sends opponent to that board &nbsp;|&nbsp; Win 3 boards in a row to win
+    </p>
+
   </div>
-</div>
 
-<div class="status-bar" id="status-bar">
-  <span id="status-content"></span>
-</div>
-
-<div class="outer-grid" id="outer-grid">
-  <svg class="outer-win-overlay" id="outer-win-svg" viewBox="0 0 3 3" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
-</div>
-
-<div class="controls">
-  <button onclick="restartGame()">↺ &nbsp;Restart</button>
-</div>
-
-<p class="hint">
-  YELLOW GLOW = you must play there &nbsp;|&nbsp; Place in a cell to send opponent to that board &nbsp;|&nbsp; Win 3 boards in a row to win
-</p>
-
-<script src="game.js" defer></script>
+  <!-- Firebase SDK (compat v10) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="game.js"></script>
 </body>
 </html>
