@@ -127,73 +127,104 @@ function showLobbyPanel(panelId) {
 }
 
 // ─── Quick Match ──────────────────────────────────────────────────────────────
+let mmQueueListener = null; // active listener reference so we can detach it
+
 async function quickMatch() {
   setLobbyError('');
   gameMode = 'online';
   showLobbyPanel('lobby-searching');
 
-  const queueRef = db.ref('matchmaking/queue');
-  const snap     = await queueRef.orderByChild('timestamp').limitToFirst(10).get();
-  let foundMatch = false;
-
+  // Step 1 — scan for anyone already waiting
+  const snap = await db.ref('matchmaking/queue').get();
   if (snap.exists()) {
-    const entries = snap.val();
-    for (const [sid, entry] of Object.entries(entries)) {
+    const entries = Object.entries(snap.val());
+    for (const [sid, entry] of entries) {
       const age = Date.now() - entry.timestamp;
       if (sid === mySessionId || age > 120000) continue;
-      const claimed = await claimQueueSlot(sid, entry.roomId);
+      const claimed = await claimQueueSlot(sid);
       if (claimed) {
-        foundMatch = true;
         await joinAsO(entry.roomId);
-        break;
+        return; // matched — done
       }
     }
   }
 
-  if (!foundMatch) {
-    roomId   = generateRoomId();
-    roomRef  = db.ref(`rooms/${roomId}`);
-    // Randomly assign creator to X or O
-    myPlayer = Math.random() < 0.5 ? 'X' : 'O';
-    const joinerSeat = myPlayer === 'X' ? 'O' : 'X';
+  // Step 2 — nobody waiting yet, create a room and add ourselves to the queue
+  roomId   = generateRoomId();
+  roomRef  = db.ref(`rooms/${roomId}`);
+  myPlayer = Math.random() < 0.5 ? 'X' : 'O';
+  const joinerSeat = myPlayer === 'X' ? 'O' : 'X';
 
-    await roomRef.set({
-      players:       { [myPlayer]: true, [joinerSeat]: false },
-      creatorPlayer: myPlayer,
-      game:          serializeGame(initialGameState()),
-      scores:        { X: 0, O: 0 },
-      status:        'waiting',
-      mode:          'matchmaking'
-    });
+  await roomRef.set({
+    players:       { [myPlayer]: true, [joinerSeat]: false },
+    creatorPlayer: myPlayer,
+    game:          serializeGame(initialGameState()),
+    scores:        { X: 0, O: 0 },
+    status:        'waiting',
+    mode:          'matchmaking'
+  });
+  roomRef.onDisconnect().remove();
 
-    roomRef.onDisconnect().remove();
+  myQueueRef = db.ref(`matchmaking/queue/${mySessionId}`);
+  await myQueueRef.set({ roomId, timestamp: Date.now() });
+  myQueueRef.onDisconnect().remove();
 
-    myQueueRef = db.ref(`matchmaking/queue/${mySessionId}`);
-    await myQueueRef.set({ roomId, timestamp: Date.now() });
-    myQueueRef.onDisconnect().remove();
+  // Step 3 — listen for OTHER people joining the queue after us.
+  // This fixes the race condition where both devices enter simultaneously
+  // and both read an empty queue — each will now detect the other's entry.
+  mmQueueListener = db.ref('matchmaking/queue').on('child_added', async (childSnap) => {
+    const sid   = childSnap.key;
+    const entry = childSnap.val();
+    if (sid === mySessionId) return; // that's us
+    if (!myQueueRef) return;         // already matched
 
-    // Watch for the joiner's seat to be filled
-    roomRef.child(`players/${joinerSeat}`).on('value', snap => {
-      if (snap.val() === true) {
-        roomRef.child(`players/${joinerSeat}`).off();
-        if (myQueueRef) {
-          myQueueRef.onDisconnect().cancel();
-          myQueueRef.remove();
-          myQueueRef = null;
-        }
-        startOnlineGame();
-      }
-    });
+    const age = Date.now() - entry.timestamp;
+    if (age > 120000) return; // stale
+
+    const claimed = await claimQueueSlot(sid);
+    if (claimed) {
+      // We claimed them — stop listening, clean up our queue entry, join their room
+      stopMmQueueListener();
+      cleanupMyQueueEntry();
+      // Remove the room we created since we're joining theirs instead
+      if (roomRef) { roomRef.onDisconnect().cancel(); await roomRef.remove(); roomRef = null; }
+      await joinAsO(entry.roomId);
+    }
+  });
+
+  // Step 4 — also watch for someone joining our room directly
+  roomRef.child(`players/${joinerSeat}`).on('value', snap => {
+    if (snap.val() === true) {
+      roomRef.child(`players/${joinerSeat}`).off();
+      stopMmQueueListener();
+      cleanupMyQueueEntry();
+      startOnlineGame();
+    }
+  });
+}
+
+function stopMmQueueListener() {
+  if (mmQueueListener) {
+    db.ref('matchmaking/queue').off('child_added', mmQueueListener);
+    mmQueueListener = null;
   }
 }
 
-async function claimQueueSlot(sessionId, targetRoomId) {
+function cleanupMyQueueEntry() {
+  if (myQueueRef) {
+    myQueueRef.onDisconnect().cancel();
+    myQueueRef.remove();
+    myQueueRef = null;
+  }
+}
+
+async function claimQueueSlot(sessionId) {
   const slotRef = db.ref(`matchmaking/queue/${sessionId}`);
   let claimed   = false;
   await slotRef.transaction(current => {
-    if (current === null) return;
+    if (current === null) return; // already claimed — abort
     claimed = true;
-    return null;
+    return null; // delete the entry
   });
   return claimed;
 }
@@ -220,11 +251,8 @@ async function joinAsO(targetRoomId) {
 }
 
 async function cancelMatchmaking() {
-  if (myQueueRef) {
-    myQueueRef.onDisconnect().cancel();
-    await myQueueRef.remove();
-    myQueueRef = null;
-  }
+  stopMmQueueListener();
+  cleanupMyQueueEntry();
   if (roomRef) {
     roomRef.onDisconnect().cancel();
     await roomRef.remove();
