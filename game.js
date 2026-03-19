@@ -31,30 +31,100 @@ let myUsername = localStorage.getItem('ttt2_username') || '';
 // names[player] e.g. names['X'] = 'Alice'
 let names = { X: '—', O: '—' };
 
-function confirmUsername() {
+// Unique username: stored at Firebase path usernames/{name} = playerId
+// On claim: write only if it doesn't exist yet (transaction).
+// On re-use: allow if stored playerId matches ours (same player returning).
+
+const myPlayerId = localStorage.getItem('ttt2_playerId') || (() => {
+  const id = 'uid_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  localStorage.setItem('ttt2_playerId', id);
+  return id;
+})();
+
+async function confirmUsername() {
   const val = document.getElementById('username-input').value.trim();
-  if (!val) {
-    document.getElementById('username-error').textContent = 'Please enter a username.';
+  const errEl = document.getElementById('username-error');
+  errEl.textContent = '';
+
+  if (!val) { errEl.textContent = 'Please enter a username.'; return; }
+  if (val.length < 2) { errEl.textContent = 'Username must be at least 2 characters.'; return; }
+
+  // If same as current username, just go straight to lobby
+  if (val === myUsername) {
+    showLobbyMain(val);
     return;
   }
+
+  errEl.textContent = 'Checking availability...';
+  const btn = document.querySelector('#lobby-username .lobby-btn');
+  btn.disabled = true;
+
+  const nameKey = val.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const nameRef = db.ref('usernames/' + nameKey);
+
+  let taken = false;
+  await nameRef.transaction(current => {
+    if (current === null) {
+      // Available — claim it
+      return { playerId: myPlayerId, display: val };
+    } else if (current.playerId === myPlayerId) {
+      // Already owned by this player (case change etc) — update display
+      return { playerId: myPlayerId, display: val };
+    } else {
+      // Taken by someone else
+      taken = true;
+      return; // abort
+    }
+  });
+
+  btn.disabled = false;
+
+  if (taken) {
+    errEl.textContent = 'That username is taken. Try another!';
+    return;
+  }
+
+  // Release old username if changed
+  if (myUsername && myUsername !== val) {
+    const oldKey = myUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    const oldRef = db.ref('usernames/' + oldKey);
+    const oldSnap = await oldRef.get();
+    if (oldSnap.exists() && oldSnap.val().playerId === myPlayerId) {
+      await oldRef.remove();
+    }
+  }
+
   myUsername = val;
   localStorage.setItem('ttt2_username', myUsername);
+  showLobbyMain(val);
+}
+
+function showLobbyMain(name) {
   document.getElementById('lobby-username').classList.add('hidden');
   document.getElementById('lobby-main').classList.remove('hidden');
-  document.getElementById('username-display').textContent = myUsername;
+  document.getElementById('username-display').textContent = name;
 }
 
 function changeUsername() {
   document.getElementById('lobby-main').classList.add('hidden');
   document.getElementById('lobby-username').classList.remove('hidden');
   document.getElementById('username-input').value = myUsername;
+  document.getElementById('username-error').textContent = '';
 }
 
-function initLobby() {
+async function initLobby() {
   if (myUsername) {
-    document.getElementById('lobby-username').classList.add('hidden');
-    document.getElementById('lobby-main').classList.remove('hidden');
-    document.getElementById('username-display').textContent = myUsername;
+    // Verify our username is still ours in Firebase (could have been cleared)
+    const nameKey = myUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    const snap = await db.ref('usernames/' + nameKey).get();
+    if (snap.exists() && snap.val().playerId === myPlayerId) {
+      showLobbyMain(myUsername);
+    } else {
+      // Someone else claimed it while we were away — ask for a new one
+      myUsername = '';
+      localStorage.removeItem('ttt2_username');
+      document.getElementById('username-input').focus();
+    }
   } else {
     document.getElementById('username-input').focus();
   }

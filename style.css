@@ -116,11 +116,51 @@ body::after {
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
   padding: 40px 36px; text-align: center; width: 100%; max-width: 380px;
 }
-.lobby-box h1 {
-  font-family: 'Bebas Neue', sans-serif; font-size: 2.4rem; letter-spacing: 0.12em;
-  background: linear-gradient(135deg, var(--x-color), var(--active-glow), var(--o-color));
+.lobby-box h1 { display: none; } /* replaced by .game-title */
+
+/* ── Game Title ──────────────────────────────────────────────────────────── */
+.game-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+.title-main {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.2rem;
+  letter-spacing: 0.1em;
+  background: linear-gradient(135deg, var(--x-color), var(--active-glow));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-  line-height: 1; margin-bottom: 5px;
+  line-height: 1;
+}
+
+.title-two {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, var(--active-glow), var(--o-color));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  position: relative;
+}
+
+/* Subtle divider between main title and Two */
+.title-two::before {
+  content: '·';
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.2rem;
+  margin-right: 10px;
+  background: linear-gradient(135deg, var(--active-glow), var(--o-color));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+
+.title-two-inner {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 2.6rem;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }
 .subtitle { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.25em; text-transform: uppercase; margin-top: 4px; margin-bottom: 22px; }
 
