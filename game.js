@@ -309,6 +309,7 @@ async function cancelRoom() {
 
 // ─── Leave ────────────────────────────────────────────────────────────────────
 async function leaveRoom() {
+  hideEndOverlay();
   detachListeners();
 
   if (gameMode === 'online' && roomRef) {
@@ -366,8 +367,7 @@ function startOnlineGame() {
     const players  = snap.val();
     const opponent = myPlayer === 'X' ? 'O' : 'X';
     if (players[opponent] === false && !outerWinner) {
-      document.getElementById('status-content').innerHTML =
-        `<span class="win-banner" style="color:var(--muted)">Opponent left the game.</span>`;
+      showEndOverlay('oppleft');
     }
   });
 }
@@ -452,22 +452,72 @@ function render() {
   renderStatus();
 }
 
+function showEndOverlay(result, subtitle = '') {
+  // result: 'win' | 'loss' | 'draw' | 'oppleft'
+  const overlay  = document.getElementById('end-overlay');
+  const icon     = document.getElementById('end-icon');
+  const title    = document.getElementById('end-title');
+  const sub      = document.getElementById('end-subtitle');
+  const newBtn   = document.getElementById('end-newgame-btn');
+
+  // Hide New Game button for online games when opponent left
+  // (no point replaying alone)
+  if (result === 'oppleft') {
+    newBtn.style.display = 'none';
+  } else {
+    newBtn.style.display = '';
+  }
+
+  if (result === 'win') {
+    icon.textContent  = '🏆';
+    title.textContent = 'You Win!';
+    title.style.color = 'var(--active-glow)';
+    sub.textContent   = subtitle || 'Well played!';
+  } else if (result === 'loss') {
+    icon.textContent  = '💀';
+    title.textContent = 'You Lose';
+    title.style.color = 'var(--x-color)';
+    sub.textContent   = subtitle || 'Better luck next time.';
+  } else if (result === 'draw') {
+    icon.textContent  = '🤝';
+    title.textContent = 'Draw!';
+    title.style.color = 'var(--muted)';
+    sub.textContent   = subtitle || 'Evenly matched.';
+  } else if (result === 'oppleft') {
+    icon.textContent  = '🏆';
+    title.textContent = 'You Win!';
+    title.style.color = 'var(--active-glow)';
+    sub.textContent   = 'Opponent left the game.';
+  }
+
+  overlay.classList.remove('hidden');
+}
+
+function hideEndOverlay() {
+  document.getElementById('end-overlay').classList.add('hidden');
+  document.getElementById('end-newgame-btn').style.display = '';
+}
+
 function renderStatus() {
   const el    = document.getElementById('status-content');
   const bar   = el.closest('.status-bar');
   const where = activeBoard === -1 ? 'any board' : `board ${activeBoard + 1}`;
 
   if (outerWinner === 'D') {
-    el.innerHTML = `<span class="win-banner" style="color:#888">IT'S A DRAW!</span>`;
+    el.innerHTML = `<span class="win-banner" style="color:#888">DRAW</span>`;
+    showEndOverlay('draw');
     return;
   }
 
   if (outerWinner) {
     const col = outerWinner === 'X' ? 'var(--x-color)' : 'var(--o-color)';
     if (gameMode === 'local') {
-      el.innerHTML = `<span class="win-banner" style="color:${col}">${outerWinner} WINS! 🎉</span>`;
+      el.innerHTML = `<span class="win-banner" style="color:${col}">${outerWinner} WINS!</span>`;
+      showEndOverlay('win', `${outerWinner} wins this round!`);
     } else {
-      el.innerHTML = `<span class="win-banner" style="color:${col}">${outerWinner === myPlayer ? 'YOU WIN! 🎉' : 'OPPONENT WINS!'}</span>`;
+      const youWon = outerWinner === myPlayer;
+      el.innerHTML = `<span class="win-banner" style="color:${col}">${youWon ? 'YOU WIN!' : 'OPPONENT WINS!'}</span>`;
+      showEndOverlay(youWon ? 'win' : 'loss');
     }
     return;
   }
@@ -563,6 +613,7 @@ function applyMove(b, c) {
 
 // ─── Restart ──────────────────────────────────────────────────────────────────
 async function restartGame() {
+  hideEndOverlay();
   if (gameMode === 'local') {
     resetGameState();
     buildGrid();

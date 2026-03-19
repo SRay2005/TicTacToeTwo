@@ -138,8 +138,22 @@
       <svg class="outer-win-overlay" id="outer-win-svg" viewBox="0 0 3 3" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
     </div>
 
+    <!-- Win / Loss overlay -->
+    <div id="end-overlay" class="end-overlay hidden">
+      <div class="end-box">
+        <div id="end-icon" class="end-icon"></div>
+        <div id="end-title" class="end-title"></div>
+        <div id="end-subtitle" class="end-subtitle"></div>
+        <div class="end-actions">
+          <button id="end-newgame-btn" onclick="restartGame()">↺ &nbsp;New Game</button>
+          <button onclick="leaveRoom()">⌂ &nbsp;Home</button>
+        </div>
+      </div>
+    </div>
+
     <div class="controls">
       <button onclick="restartGame()">↺ &nbsp;New Game</button>
+      <button onclick="leaveRoom()">⌂ &nbsp;Home</button>
     </div>
 
     <p class="hint">

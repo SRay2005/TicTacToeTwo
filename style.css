@@ -672,6 +672,74 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 
 .outer-win-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
 
+/* ── End Overlay ─────────────────────────────────────────────────────────── */
+.end-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.end-box {
+  text-align: center;
+  padding: 48px 48px 40px;
+  background: #161616;
+  border: 1px solid #333;
+  border-radius: 10px;
+  animation: endBoxIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-width: 340px;
+  width: 90%;
+}
+
+@keyframes endBoxIn {
+  from { transform: scale(0.8); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+.end-icon {
+  font-size: 3.2rem;
+  margin-bottom: 12px;
+  animation: endIconPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
+}
+
+@keyframes endIconPop {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+.end-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 3rem;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.end-subtitle {
+  font-size: 0.65rem;
+  color: var(--muted);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 28px;
+  line-height: 1.6;
+}
+
+.end-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 500px) {
   :root { --cell-size: 34px; }
