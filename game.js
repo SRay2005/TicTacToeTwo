@@ -309,12 +309,22 @@ async function settleRating(roomData, winner) {
   return null;
 }
 
-function showRatingDelta(delta) {
+async function showRatingDelta(delta) {
   if (delta === null || delta === undefined) return;
   const el = document.getElementById('end-rating-delta');
   el.classList.remove('hidden','gain','loss','none');
   if (delta === 0) { el.textContent = 'Rating unchanged'; el.classList.add('none'); }
   else { el.textContent = (delta > 0 ? '+' : '') + delta + ' pts'; el.classList.add(delta > 0 ? 'gain' : 'loss'); }
+
+  // Also refresh the lobby username chip rating immediately
+  refreshLobbyRating();
+}
+
+async function refreshLobbyRating() {
+  const profile = await loadProfile(myPlayerId);
+  const rating  = profile.rating || STARTING_RATING;
+  const el      = document.getElementById('username-display');
+  if (el) el.innerHTML = myUsername + ' <span class="lobby-rating-badge">' + rating + ' pts</span>';
 }
 
 // ─── Leaderboard ──────────────────────────────────────────────────────────────
@@ -355,41 +365,44 @@ async function fetchLeaderboard() {
 }
 
 // ─── Inactivity Timer ────────────────────────────────────────────────────────
+// Both clients sync from the server-stored lastMoveAt timestamp so the
+// countdown is identical on both devices regardless of network lag.
 const INACTIVITY_LIMIT = 120; // seconds
 let inactivityInterval = null;
-let inactivitySecsLeft = INACTIVITY_LIMIT;
+let moveStartedAt      = 0;   // ms — set from Firebase server timestamp
 
-function startInactivityTimer() {
+function startInactivityTimer(serverTimestamp) {
   clearInactivityTimer();
   if (gameMode !== 'online' || outerWinner) return;
 
-  inactivitySecsLeft = INACTIVITY_LIMIT;
+  // Use the server timestamp if provided, otherwise fall back to now
+  moveStartedAt = serverTimestamp || Date.now();
+
   const bar   = document.getElementById('inactivity-bar');
   const fill  = document.getElementById('inactivity-fill');
   const label = document.getElementById('inactivity-label');
   const cd    = document.getElementById('inactivity-countdown');
 
   bar.classList.remove('hidden');
-  fill.style.width = '100%';
-  fill.classList.remove('urgent');
-  label.classList.remove('urgent');
 
   inactivityInterval = setInterval(async () => {
-    inactivitySecsLeft--;
-    const pct = (inactivitySecsLeft / INACTIVITY_LIMIT) * 100;
-    fill.style.width = pct + '%';
-    cd.textContent = inactivitySecsLeft;
+    // Calculate remaining time from the authoritative server timestamp
+    const elapsed  = (Date.now() - moveStartedAt) / 1000;
+    const secsLeft = Math.max(0, Math.round(INACTIVITY_LIMIT - elapsed));
+    const pct      = (secsLeft / INACTIVITY_LIMIT) * 100;
 
-    const urgent = inactivitySecsLeft <= 30;
+    fill.style.width = pct + '%';
+    cd.textContent   = secsLeft;
+
+    const urgent = secsLeft <= 30;
     fill.classList.toggle('urgent', urgent);
     label.classList.toggle('urgent', urgent);
 
-    if (inactivitySecsLeft <= 0) {
+    if (secsLeft <= 0) {
       clearInactivityTimer();
-      // The active player timed out — write a forfeit flag to Firebase
-      // Only the current player's opponent should trigger this to avoid double-write
+      // Only the waiting player (opponent's turn) triggers the forfeit
+      // to avoid both clients writing simultaneously
       if (currentPlayer !== myPlayer) {
-        // It's the opponent's turn and they timed out — we declare win
         await roomRef.child('forfeit').set({ loser: currentPlayer, ts: Date.now() });
       }
     }
@@ -481,7 +494,8 @@ function serializeGame(state) {
     outerWinner:   state.outerWinner ?? '',
     activeBoard:   state.activeBoard,
     currentPlayer: state.currentPlayer,
-    moveCount:     state.moveCount
+    moveCount:     state.moveCount,
+    lastMoveAt:    firebase.database.ServerValue.TIMESTAMP
   };
 }
 
@@ -785,9 +799,10 @@ async function startOnlineGame() {
 
   gameListener = roomRef.child('game').on('value', snap => {
     if (!snap.exists()) return;
-    deserializeGame(snap.val());
+    const gameData = snap.val();
+    deserializeGame(gameData);
     render();
-    if (!outerWinner) startInactivityTimer();
+    if (!outerWinner) startInactivityTimer(gameData.lastMoveAt || Date.now());
     else clearInactivityTimer();
   });
 
@@ -1054,7 +1069,8 @@ async function handleClick(b, c) {
       await roomRef.child('scores').set(scores);
       clearInactivityTimer();
     } else {
-      startInactivityTimer(); // reset timer after each move
+      // The game listener will fire and call startInactivityTimer with the
+      // server timestamp — no need to call it here separately
     }
   } else {
     // Local — just re-render
@@ -1101,6 +1117,8 @@ async function restartGame() {
   clearInactivityTimer();
   const deltaEl = document.getElementById('end-rating-delta');
   if (deltaEl) deltaEl.classList.add('hidden');
+  // Refresh lobby rating badge so it shows new rating if user goes home
+  if (isRanked) refreshLobbyRating();
   // Clear forfeit flag so new game is clean
   if (gameMode === 'online' && roomRef) await roomRef.child('forfeit').remove();
   document.body.style.setProperty('--bg-tint', 'transparent');
