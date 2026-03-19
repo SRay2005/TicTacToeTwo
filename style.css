@@ -477,24 +477,24 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 
 .lb-header-row {
   display: grid;
-  grid-template-columns: 40px 1fr 80px 90px;
+  grid-template-columns: 32px 1fr 64px 72px;
   gap: 0;
   padding: 6px 10px;
-  font-size: 0.55rem;
-  letter-spacing: 0.15em;
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
 }
 
-.lb-list { display: flex; flex-direction: column; gap: 2px; max-height: 400px; overflow-y: auto; }
+.lb-list { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow-y: auto; }
 
 .lb-loading { text-align: center; color: var(--muted); font-size: 0.65rem; padding: 20px; letter-spacing: 0.1em; }
 
 .lb-row {
   display: grid;
-  grid-template-columns: 40px 1fr 80px 90px;
+  grid-template-columns: 32px 1fr 64px 72px;
   align-items: center;
   padding: 9px 10px;
   border-radius: 4px;
@@ -512,18 +512,25 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 .lb-col-rank.top2 { color: #c0c0c0; }
 .lb-col-rank.top3 { color: var(--bronze, #cd7f32); }
 
-.lb-col-name { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 8px; }
+/* Name: allow full display, wrap if needed */
+.lb-col-name {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em;
+  word-break: break-all;
+  padding-right: 6px;
+  line-height: 1.3;
+}
 
 .lb-col-rating {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 1.1rem; letter-spacing: 0.05em;
   color: var(--active-glow); line-height: 1;
-  text-align: right; padding-right: 10px;
+  text-align: right; padding-right: 8px;
 }
 
 .lb-col-record {
-  font-size: 0.58rem; color: var(--muted);
-  letter-spacing: 0.04em; text-align: right;
+  font-size: 0.55rem; color: var(--muted);
+  letter-spacing: 0.03em; text-align: right;
+  line-height: 1.6;
 }
 
 .lb-col-record .w { color: #4dff91; }
