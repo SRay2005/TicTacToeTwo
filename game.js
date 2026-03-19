@@ -155,11 +155,18 @@ async function quickMatch() {
       const age = Date.now() - entry.timestamp;
       if (sid === mySessionId || age > 60000) continue;
 
-      // Verify the room actually exists and is still open before claiming
-      const roomSnap = await db.ref('rooms/' + entry.roomId + '/status').get();
-      if (!roomSnap.exists() || roomSnap.val() !== 'waiting') {
-        // Room is gone or already full — remove the dead queue entry
+      // Verify the room actually exists, is still open, and is fresh (< 30s)
+      const roomSnap = await db.ref('rooms/' + entry.roomId).get();
+      if (!roomSnap.exists()) {
         await db.ref('matchmaking/queue/' + sid).remove();
+        continue;
+      }
+      const roomData = roomSnap.val();
+      const roomAge  = Date.now() - (roomData.createdAt || 0);
+      if (roomData.status !== 'waiting' || roomAge > 30000) {
+        // Stale or already full — purge both room and queue entry
+        await db.ref('matchmaking/queue/' + sid).remove();
+        await db.ref('rooms/' + entry.roomId).remove();
         continue;
       }
 
@@ -183,7 +190,8 @@ async function quickMatch() {
     game:          serializeGame(initialGameState()),
     scores:        { X: 0, O: 0 },
     status:        'waiting',
-    mode:          'matchmaking'
+    mode:          'matchmaking',
+    createdAt:     Date.now()
   });
   roomRef.onDisconnect().remove();
 
@@ -300,7 +308,8 @@ async function createRoom() {
     game:          serializeGame(initialGameState()),
     scores:        { X: 0, O: 0 },
     status:        'waiting',
-    mode:          'private'
+    mode:          'private',
+    createdAt:     Date.now()
   });
 
   roomRef.onDisconnect().remove();
