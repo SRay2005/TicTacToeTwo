@@ -443,6 +443,16 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 .username-display:hover { background: rgba(255,224,102,0.1); }
 .username-display::before { content: "✎ "; opacity: 0.6; }
 
+.lobby-rating-badge {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* Rating delta on end overlay */
 .end-rating-delta {
   font-family: 'Bebas Neue', sans-serif;

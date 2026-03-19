@@ -229,11 +229,16 @@ function backToUsername() {
   pendingUsername = '';
 }
 
-function showLobbyMain(name) {
+async function showLobbyMain(name) {
   ['lobby-username','lobby-set-password','lobby-login-password'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
   document.getElementById('lobby-main').classList.remove('hidden');
-  document.getElementById('username-display').textContent = name;
+
+  // Load rating and display alongside username
+  const profile = await loadProfile(myPlayerId);
+  const rating  = profile.rating || STARTING_RATING;
+  const el      = document.getElementById('username-display');
+  el.innerHTML  = name + ' <span class="lobby-rating-badge">' + rating + ' pts</span>';
 }
 
 function changeUsername() {
@@ -672,7 +677,8 @@ async function joinRoom() {
   const hasOpenSeat = rdata.players && (rdata.players.X === false || rdata.players.O === false);
   if (!hasOpenSeat) { setLobbyError('Room is full — game already in progress.'); return; }
 
-  gameMode = 'online';
+  gameMode  = 'online';
+  isRanked  = false;
 
   // Find the open seat and join it
   const joinerSeat = rdata.players.X === false ? 'X' : 'O';
