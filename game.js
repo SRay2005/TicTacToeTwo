@@ -153,14 +153,17 @@ async function quickMatch() {
   if (!foundMatch) {
     roomId   = generateRoomId();
     roomRef  = db.ref(`rooms/${roomId}`);
-    myPlayer = 'X';
+    // Randomly assign creator to X or O
+    myPlayer = Math.random() < 0.5 ? 'X' : 'O';
+    const joinerSeat = myPlayer === 'X' ? 'O' : 'X';
 
     await roomRef.set({
-      players: { X: true, O: false },
-      game:    serializeGame(initialGameState()),
-      scores:  { X: 0, O: 0 },
-      status:  'waiting',
-      mode:    'matchmaking'
+      players:       { [myPlayer]: true, [joinerSeat]: false },
+      creatorPlayer: myPlayer,
+      game:          serializeGame(initialGameState()),
+      scores:        { X: 0, O: 0 },
+      status:        'waiting',
+      mode:          'matchmaking'
     });
 
     roomRef.onDisconnect().remove();
@@ -169,9 +172,10 @@ async function quickMatch() {
     await myQueueRef.set({ roomId, timestamp: Date.now() });
     myQueueRef.onDisconnect().remove();
 
-    roomRef.child('players/O').on('value', snap => {
+    // Watch for the joiner's seat to be filled
+    roomRef.child(`players/${joinerSeat}`).on('value', snap => {
       if (snap.val() === true) {
-        roomRef.child('players/O').off();
+        roomRef.child(`players/${joinerSeat}`).off();
         if (myQueueRef) {
           myQueueRef.onDisconnect().cancel();
           myQueueRef.remove();
@@ -196,16 +200,22 @@ async function claimQueueSlot(sessionId, targetRoomId) {
 
 async function joinAsO(targetRoomId) {
   const snap = await db.ref(`rooms/${targetRoomId}`).get();
-  if (!snap.exists() || snap.val().players.O === true) {
-    await quickMatch();
-    return;
-  }
+  if (!snap.exists()) { await quickMatch(); return; }
+
+  const data       = snap.val();
+  const creatorSeat = data.creatorPlayer || 'X';   // fallback for private rooms
+  const joinerSeat  = creatorSeat === 'X' ? 'O' : 'X';
+
+  // If the joiner seat is already taken, try again
+  if (data.players[joinerSeat] === true) { await quickMatch(); return; }
+
   roomId   = targetRoomId;
   roomRef  = db.ref(`rooms/${roomId}`);
-  myPlayer = 'O';
-  await roomRef.child('players/O').set(true);
+  myPlayer = joinerSeat;
+
+  await roomRef.child(`players/${joinerSeat}`).set(true);
   await roomRef.child('status').set('playing');
-  roomRef.child('players/O').onDisconnect().set(false);
+  roomRef.child(`players/${joinerSeat}`).onDisconnect().set(false);
   startOnlineGame();
 }
 
@@ -230,23 +240,26 @@ async function createRoom() {
   gameMode = 'online';
   roomId   = generateRoomId();
   roomRef  = db.ref(`rooms/${roomId}`);
-  myPlayer = 'X';
+  // Randomly assign creator to X or O
+  myPlayer = Math.random() < 0.5 ? 'X' : 'O';
+  const joinerSeat = myPlayer === 'X' ? 'O' : 'X';
 
   await roomRef.set({
-    players: { X: true, O: false },
-    game:    serializeGame(initialGameState()),
-    scores:  { X: 0, O: 0 },
-    status:  'waiting',
-    mode:    'private'
+    players:       { [myPlayer]: true, [joinerSeat]: false },
+    creatorPlayer: myPlayer,
+    game:          serializeGame(initialGameState()),
+    scores:        { X: 0, O: 0 },
+    status:        'waiting',
+    mode:          'private'
   });
 
   roomRef.onDisconnect().remove();
   showLobbyPanel('lobby-waiting');
   document.getElementById('room-code-display').textContent = roomId;
 
-  roomRef.child('players/O').on('value', snap => {
+  roomRef.child(`players/${joinerSeat}`).on('value', snap => {
     if (snap.val() === true) {
-      roomRef.child('players/O').off();
+      roomRef.child(`players/${joinerSeat}`).off();
       startOnlineGame();
     }
   });
