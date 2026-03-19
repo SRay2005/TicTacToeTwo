@@ -801,7 +801,7 @@ async function startOnlineGame() {
       clearInactivityTimer();
       outerWinner = myPlayer; // treat as win for remaining player
       showEndOverlay('oppleft');
-      roomRef.get().then(s => settleRating(s.val(), myPlayer).then(d => showRatingDelta(d)));
+      if (isRanked) roomRef.get().then(s => settleRating(s.val(), myPlayer).then(d => showRatingDelta(d)));
     }
   });
 
@@ -819,7 +819,7 @@ async function startOnlineGame() {
         showEndOverlay('loss', 'You ran out of time.');
       }
       // Settle rating — treat forfeit as a normal win/loss
-      roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d)));
+      if (isRanked) roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d)));
     }
   });
 
@@ -977,7 +977,7 @@ function renderStatus() {
   if (outerWinner === 'D') {
     el.innerHTML = `<span class="win-banner" style="color:#888">DRAW</span>`;
     showEndOverlay('draw');
-    if (gameMode === 'online') roomRef.get().then(s => settleRating(s.val(),'D').then(d => showRatingDelta(d)));
+    if (gameMode === 'online' && isRanked) roomRef.get().then(s => settleRating(s.val(),'D').then(d => showRatingDelta(d)));
     return;
   }
 
@@ -990,7 +990,7 @@ function renderStatus() {
       const youWon = outerWinner === myPlayer;
       el.innerHTML = `<span class="win-banner" style="color:${col}">${youWon ? 'YOU WIN!' : 'OPPONENT WINS!'}</span>`;
       showEndOverlay(youWon ? 'win' : 'loss');
-      roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d)));
+      if (isRanked) roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d)));
     }
     return;
   }
