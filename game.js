@@ -286,7 +286,19 @@ async function joinRoom() {
   if (!hasOpenSeat) { setLobbyError('Room is full — game already in progress.'); return; }
 
   gameMode = 'online';
-  await joinAsO(code);
+
+  // Find the open seat and join it
+  const joinerSeat = rdata.players.X === false ? 'X' : 'O';
+
+  roomId   = code;
+  roomRef  = db.ref('rooms/' + roomId);
+  myPlayer = joinerSeat;
+
+  await roomRef.child('players/' + joinerSeat).set(true);
+  await roomRef.child('status').set('playing');
+  roomRef.child('players/' + joinerSeat).onDisconnect().set(false);
+
+  startOnlineGame();
 }
 
 async function cancelRoom() {
