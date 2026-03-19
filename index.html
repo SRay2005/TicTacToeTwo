@@ -60,7 +60,7 @@
 
   <!-- ── Lobby Screen ───────────────────────────────────────────────── -->
   <div id="lobby-screen">
-    <button class="htp-trigger" onclick="openHTP()">How to Play ?</button>
+    <button class="htp-trigger" onclick="openHTP()">? How to Play</button>
     <div class="lobby-box">
       <div class="game-title">
         <span class="title-main">Tic · Tac · Toe</span>
@@ -162,7 +162,7 @@
 
   <!-- ── Game Screen ────────────────────────────────────────────────── -->
   <div id="game-screen" class="hidden">
-    <button class="htp-trigger in-game" onclick="openHTP()">How to Play ?</button>
+    <button class="htp-trigger in-game" onclick="openHTP()">? How to Play</button>
 
     <!-- Desktop: three-column layout. Mobile: stacked. -->
     <div class="game-layout">
@@ -222,9 +222,9 @@ Your move sends opponent to that board</p>
       <!-- Right panel -->
       <div class="game-panel game-panel-right">
         <div class="controls-vertical">
-          <button onclick="restartGame()">↺ New Game</button>
+          <button id="ingame-newgame-btn" onclick="restartGame()">↺ New Game</button>
           <button onclick="leaveRoom()">⌂ Home</button>
-          <button class="htp-mobile-btn" onclick="openHTP()">How to Play ?</button>
+          <button class="htp-mobile-btn" onclick="openHTP()">? How to Play</button>
         </div>
       </div>
 

@@ -724,6 +724,7 @@ async function cancelRoom() {
 async function leaveRoom() {
   hideEndOverlay();
   clearInactivityTimer();
+  setIngameNewGameVisible(true);
   document.body.style.setProperty('--bg-tint', 'transparent');
   // Remove our ready flag so opponent's button resets
   if (roomRef && myPlayer) {
@@ -790,6 +791,9 @@ async function startOnlineGame() {
 
   buildGrid();
 
+  // Hide in-game New Game button during ranked games
+  setIngameNewGameVisible(!isRanked);
+
   // Listen for username/rating of late-joining guest
   roomRef.child('usernameGuest').on('value', snap => {
     if (snap.exists()) {
@@ -833,6 +837,7 @@ async function startOnlineGame() {
     if (players[opponent] === false && !outerWinner) {
       clearInactivityTimer();
       outerWinner = myPlayer; // treat as win for remaining player
+      setIngameNewGameVisible(true);
       showEndOverlay('oppleft');
       if (isRanked) roomRef.get().then(s => settleRating(s.val(), myPlayer).then(d => showRatingDelta(d)));
     }
@@ -846,6 +851,7 @@ async function startOnlineGame() {
       clearInactivityTimer();
       outerWinner = loser === 'X' ? 'O' : 'X';
       const youWon = myPlayer === outerWinner;
+      setIngameNewGameVisible(true);
       if (youWon) {
         showEndOverlay('win', 'Opponent ran out of time!');
       } else {
@@ -1015,6 +1021,11 @@ function hideEndOverlay() {
   document.getElementById('end-newgame-btn').style.display = '';
 }
 
+function setIngameNewGameVisible(visible) {
+  const btn = document.getElementById('ingame-newgame-btn');
+  if (btn) btn.style.display = visible ? '' : 'none';
+}
+
 function renderStatus() {
   const el    = document.getElementById('status-content');
   const bar   = el.closest('.status-bar');
@@ -1022,6 +1033,7 @@ function renderStatus() {
 
   if (outerWinner === 'D') {
     el.innerHTML = `<span class="win-banner" style="color:#888">DRAW</span>`;
+    setIngameNewGameVisible(true);
     showEndOverlay('draw');
     if (gameMode === 'online' && isRanked) roomRef.get().then(s => settleRating(s.val(),'D').then(d => showRatingDelta(d)));
     return;
@@ -1035,6 +1047,7 @@ function renderStatus() {
     } else {
       const youWon = outerWinner === myPlayer;
       el.innerHTML = `<span class="win-banner" style="color:${col}">${youWon ? 'YOU WIN!' : 'OPPONENT WINS!'}</span>`;
+      setIngameNewGameVisible(true);
       showEndOverlay(youWon ? 'win' : 'loss');
       if (isRanked) roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d)));
     }
