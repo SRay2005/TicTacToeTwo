@@ -14,12 +14,10 @@
     <div class="modal-box">
       <button class="modal-close" onclick="closeHTPBtn()">✕</button>
       <h2 class="modal-title">How to Play</h2>
-
       <div class="htp-section">
         <div class="htp-tag">The Board</div>
         <p>A 3×3 grid of mini tic-tac-toe boards. Win 3 mini boards in a row to win the game.</p>
       </div>
-
       <div class="htp-section">
         <div class="htp-tag">The Rule</div>
         <p>Where you play <em>inside</em> a mini board determines which mini board your opponent must play in next.</p>
@@ -28,17 +26,14 @@
           → opponent must play in the <span class="hx">top-left board</span>
         </div>
       </div>
-
       <div class="htp-section">
         <div class="htp-tag">Free Choice</div>
         <p>If the board you're sent to is already won or drawn, you may play in <em>any</em> open board.</p>
       </div>
-
       <div class="htp-section">
         <div class="htp-tag">Winning</div>
         <p>Claim a mini board by getting 3 in a row inside it. Get 3 claimed boards in a row on the outer grid to win.</p>
       </div>
-
       <div class="htp-legend">
         <div class="legend-item"><span class="legend-dot glow"></span> Yellow border = board you must play in</div>
         <div class="legend-item"><span class="legend-dot faint"></span> Faint yellow = any board is valid</div>
@@ -48,15 +43,25 @@
 
   <!-- ── Lobby Screen ───────────────────────────────────────────────── -->
   <div id="lobby-screen">
-
     <button class="htp-trigger" onclick="openHTP()">? How to Play</button>
-
     <div class="lobby-box">
       <h1>Tic · Tac · Toe · Two</h1>
       <p class="subtitle">The Ultimate Tic-Tac-Toe</p>
 
-      <!-- Main lobby -->
-      <div id="lobby-main">
+      <!-- Username prompt (shown first) -->
+      <div id="lobby-username">
+        <div class="username-prompt">
+          <div class="mode-label" style="margin-bottom:12px">What's your name?</div>
+          <input id="username-input" type="text" placeholder="ENTER USERNAME" maxlength="16"
+            onkeydown="if(event.key==='Enter') confirmUsername()" autocomplete="off" />
+          <button class="lobby-btn primary" style="width:100%;margin-top:10px" onclick="confirmUsername()">Let's Play →</button>
+          <p id="username-error" class="lobby-error"></p>
+        </div>
+      </div>
+
+      <!-- Main lobby (shown after username set) -->
+      <div id="lobby-main" class="hidden">
+        <div class="username-display" id="username-display" onclick="changeUsername()"></div>
 
         <div class="mode-group">
           <div class="mode-label">Play Online</div>
@@ -82,7 +87,7 @@
         <p id="lobby-error" class="lobby-error"></p>
       </div>
 
-      <!-- Searching (matchmaking) -->
+      <!-- Searching -->
       <div id="lobby-searching" class="hidden">
         <div class="searching-icon">⚡</div>
         <p class="waiting-label">Finding an opponent</p>
@@ -99,43 +104,67 @@
         <p class="waiting-dots">Waiting for opponent<span class="dots"></span></p>
         <button class="lobby-btn small" onclick="cancelRoom()">Cancel</button>
       </div>
-
     </div>
   </div>
 
   <!-- ── Game Screen ────────────────────────────────────────────────── -->
   <div id="game-screen" class="hidden">
-
     <button class="htp-trigger in-game" onclick="openHTP()">? How to Play</button>
 
-    <header>
-      <h1>Tic · Tac · Toe · Two</h1>
-      <p class="subtitle" id="game-subtitle"></p>
-    </header>
+    <!-- Desktop: three-column layout. Mobile: stacked. -->
+    <div class="game-layout">
 
-    <div class="room-info-bar" id="room-info-bar">
-      <span id="room-info-label"></span>
-      <span id="my-player-label"></span>
-      <button class="lobby-btn small" onclick="leaveRoom()">Leave</button>
-    </div>
+      <!-- Left panel -->
+      <div class="game-panel game-panel-left">
+        <div class="panel-title" id="game-subtitle-left"></div>
 
-    <div class="scores">
-      <div class="score-box">
-        <div class="score-label" id="score-label-x">X — Wins</div>
-        <div class="score-val x" id="score-x">0</div>
+        <!-- Player X card -->
+        <div class="player-card" id="player-card-x">
+          <div class="pc-symbol x">X</div>
+          <div class="pc-info">
+            <div class="pc-name" id="pc-name-x">—</div>
+            <div class="pc-wins"><span id="score-x">0</span> wins</div>
+          </div>
+        </div>
+
+        <!-- Player O card -->
+        <div class="player-card" id="player-card-o">
+          <div class="pc-symbol o">O</div>
+          <div class="pc-info">
+            <div class="pc-name" id="pc-name-o">—</div>
+            <div class="pc-wins"><span id="score-o">0</span> wins</div>
+          </div>
+        </div>
+
+        <!-- Room info (online only) -->
+        <div class="room-info-bar hidden" id="room-info-bar">
+          <span id="room-info-label"></span>
+        </div>
       </div>
-      <div class="score-box">
-        <div class="score-label" id="score-label-o">O — Wins</div>
-        <div class="score-val o" id="score-o">0</div>
+
+      <!-- Center: board -->
+      <div class="game-center">
+        <div class="status-bar">
+          <span id="status-content"></span>
+        </div>
+
+        <div class="outer-grid" id="outer-grid">
+          <svg class="outer-win-overlay" id="outer-win-svg" viewBox="0 0 3 3" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+
+        <p class="hint">
+          YELLOW GLOW = you must play there &nbsp;|&nbsp; Your move sends opponent to that board
+        </p>
       </div>
-    </div>
 
-    <div class="status-bar">
-      <span id="status-content"></span>
-    </div>
+      <!-- Right panel -->
+      <div class="game-panel game-panel-right">
+        <div class="controls-vertical">
+          <button onclick="restartGame()">↺ New Game</button>
+          <button onclick="leaveRoom()">⌂ Home</button>
+        </div>
+      </div>
 
-    <div class="outer-grid" id="outer-grid">
-      <svg class="outer-win-overlay" id="outer-win-svg" viewBox="0 0 3 3" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
     </div>
 
     <!-- Win / Loss overlay -->
@@ -150,16 +179,6 @@
         </div>
       </div>
     </div>
-
-    <div class="controls">
-      <button onclick="restartGame()">↺ &nbsp;New Game</button>
-      <button onclick="leaveRoom()">⌂ &nbsp;Home</button>
-    </div>
-
-    <p class="hint">
-      YELLOW GLOW = you must play there &nbsp;|&nbsp; Your move sends opponent to that board &nbsp;|&nbsp; Win 3 boards in a row to win
-    </p>
-
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>

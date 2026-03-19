@@ -26,6 +26,40 @@ let scoresListener  = null;
 let playersListener = null;
 const mySessionId   = Math.random().toString(36).slice(2);
 
+// ─── Username ────────────────────────────────────────────────────────────────
+let myUsername = localStorage.getItem('ttt2_username') || '';
+// names[player] e.g. names['X'] = 'Alice'
+let names = { X: '—', O: '—' };
+
+function confirmUsername() {
+  const val = document.getElementById('username-input').value.trim();
+  if (!val) {
+    document.getElementById('username-error').textContent = 'Please enter a username.';
+    return;
+  }
+  myUsername = val;
+  localStorage.setItem('ttt2_username', myUsername);
+  document.getElementById('lobby-username').classList.add('hidden');
+  document.getElementById('lobby-main').classList.remove('hidden');
+  document.getElementById('username-display').textContent = myUsername;
+}
+
+function changeUsername() {
+  document.getElementById('lobby-main').classList.add('hidden');
+  document.getElementById('lobby-username').classList.remove('hidden');
+  document.getElementById('username-input').value = myUsername;
+}
+
+function initLobby() {
+  if (myUsername) {
+    document.getElementById('lobby-username').classList.add('hidden');
+    document.getElementById('lobby-main').classList.remove('hidden');
+    document.getElementById('username-display').textContent = myUsername;
+  } else {
+    document.getElementById('username-input').focus();
+  }
+}
+
 // ─── Game State ───────────────────────────────────────────────────────────────
 const WINS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
@@ -54,16 +88,19 @@ function closeHTP(e) {
 // ─── Pass & Play ──────────────────────────────────────────────────────────────
 function startPassAndPlay() {
   gameMode  = 'local';
-  myPlayer  = null; // both players share the screen — no "my player"
+  myPlayer  = null;
+  names     = { X: 'Player X', O: 'Player O' };
 
   resetGameState();
 
   document.getElementById('lobby-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
-  document.getElementById('game-subtitle').textContent = 'Pass & Play';
+  document.getElementById('game-subtitle-left').textContent = 'Pass & Play';
   document.getElementById('room-info-bar').classList.add('hidden');
-  document.getElementById('score-label-x').textContent = 'X — Wins';
-  document.getElementById('score-label-o').textContent = 'O — Wins';
+  document.getElementById('pc-name-x').textContent = names.X;
+  document.getElementById('pc-name-o').textContent = names.O;
+  document.getElementById('score-x').textContent = '0';
+  document.getElementById('score-o').textContent = '0';
 
   buildGrid();
   render();
@@ -154,6 +191,7 @@ async function quickMatch() {
   };
 
   // Write the room first so it exists before we advertise it
+  myRoomData.usernameHost = myUsername;
   await db.ref('rooms/' + myRoomId).set(myRoomData);
   db.ref('rooms/' + myRoomId).onDisconnect().remove();
 
@@ -196,6 +234,7 @@ async function quickMatch() {
 
     await roomRef.child('players/' + joinerSeat).set(true);
     await roomRef.child('status').set('playing');
+    await roomRef.child('usernameGuest').set(myUsername);
     roomRef.child('players/' + joinerSeat).onDisconnect().set(false);
 
     startOnlineGame();
@@ -255,7 +294,8 @@ async function createRoom() {
     scores:        { X: 0, O: 0 },
     status:        'waiting',
     mode:          'private',
-    createdAt:     Date.now()
+    createdAt:     Date.now(),
+    usernameHost:  myUsername
   });
 
   roomRef.onDisconnect().remove();
@@ -296,6 +336,7 @@ async function joinRoom() {
 
   await roomRef.child('players/' + joinerSeat).set(true);
   await roomRef.child('status').set('playing');
+  await roomRef.child('usernameGuest').set(myUsername);
   roomRef.child('players/' + joinerSeat).onDisconnect().set(false);
 
   startOnlineGame();
@@ -310,6 +351,7 @@ async function cancelRoom() {
 // ─── Leave ────────────────────────────────────────────────────────────────────
 async function leaveRoom() {
   hideEndOverlay();
+  document.body.style.setProperty('--bg-tint', 'transparent');
   detachListeners();
 
   if (gameMode === 'online' && roomRef) {
@@ -338,15 +380,39 @@ function detachListeners() {
 }
 
 // ─── Start Online Game ────────────────────────────────────────────────────────
-function startOnlineGame() {
+async function startOnlineGame() {
   document.getElementById('lobby-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
-  document.getElementById('game-subtitle').textContent = 'Online Multiplayer';
+  document.getElementById('game-subtitle-left').textContent = 'Online';
   document.getElementById('room-info-bar').classList.remove('hidden');
-  document.getElementById('room-info-label').textContent = `Room: ${roomId}`;
-  document.getElementById('my-player-label').textContent = `You are: ${myPlayer}`;
+  document.getElementById('room-info-label').textContent = 'Room: ' + roomId;
+
+  // Fetch usernames from room
+  const roomSnap = await roomRef.get();
+  const rdata    = roomSnap.val() || {};
+  const hostUser  = rdata.usernameHost  || 'Host';
+  const guestUser = rdata.usernameGuest || 'Guest';
+  const hostSeat  = rdata.creatorPlayer || 'X';
+  const guestSeat = hostSeat === 'X' ? 'O' : 'X';
+
+  names[hostSeat]  = hostUser;
+  names[guestSeat] = guestUser;
+
+  document.getElementById('pc-name-x').textContent = names.X;
+  document.getElementById('pc-name-o').textContent = names.Y || names.O || '—';
+  document.getElementById('pc-name-o').textContent = names.O;
+  document.getElementById('score-x').textContent = '0';
+  document.getElementById('score-o').textContent = '0';
 
   buildGrid();
+
+  // Listen for username of late-joining guest (if we're the host and they join after)
+  roomRef.child('usernameGuest').on('value', snap => {
+    if (snap.exists()) {
+      names[guestSeat] = snap.val();
+      document.getElementById('pc-name-' + guestSeat.toLowerCase()).textContent = snap.val();
+    }
+  });
 
   gameListener = roomRef.child('game').on('value', snap => {
     if (!snap.exists()) return;
@@ -449,6 +515,22 @@ function render() {
   }
 
   if (outerWinner) drawOuterWinLine(outerWinner);
+
+  // Background tint based on whose turn it is
+  if (!outerWinner) {
+    document.body.style.setProperty('--bg-tint',
+      currentPlayer === 'X'
+        ? 'rgba(255,77,77,0.04)'
+        : 'rgba(77,170,255,0.04)'
+    );
+  } else {
+    document.body.style.setProperty('--bg-tint', 'transparent');
+  }
+
+  // Highlight active player card
+  document.getElementById('player-card-x').className = 'player-card' + (currentPlayer === 'X' && !outerWinner ? ' active-x' : '');
+  document.getElementById('player-card-o').className = 'player-card' + (currentPlayer === 'O' && !outerWinner ? ' active-o' : '');
+
   renderStatus();
 }
 
@@ -614,6 +696,7 @@ function applyMove(b, c) {
 // ─── Restart ──────────────────────────────────────────────────────────────────
 async function restartGame() {
   hideEndOverlay();
+  document.body.style.setProperty('--bg-tint', 'transparent');
   if (gameMode === 'local') {
     resetGameState();
     buildGrid();
@@ -661,6 +744,9 @@ function getWinLineCoords(cells) {
   }
   return null;
 }
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+initLobby();
 
 // ─── Dots Animation ───────────────────────────────────────────────────────────
 let dotCount = 0;
