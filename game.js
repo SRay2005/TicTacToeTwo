@@ -205,22 +205,31 @@ function closeLB(e)  { if (e.target === document.getElementById('lb-modal')) clo
 async function fetchLeaderboard() {
   const listEl = document.getElementById('lb-list');
   listEl.innerHTML = '<div class="lb-loading">Loading...</div>';
-  const snap = await db.ref('players').orderByChild('rating').limitToLast(20).get();
+  // Fetch all players without ordering (avoids needing a Firebase index)
+  const snap = await db.ref('players').get();
   if (!snap.exists()) { listEl.innerHTML = '<div class="lb-loading">No players yet.</div>'; return; }
   const rows = [];
-  snap.forEach(child => { rows.push({ id: child.key, ...child.val() }); });
-  rows.sort((a, b) => (b.rating||0) - (a.rating||0));
+  snap.forEach(child => {
+    const val = child.val();
+    // Only show players who have played at least one rated game
+    if (val.wins || val.losses || val.draws) rows.push({ id: child.key, ...val });
+  });
+  if (rows.length === 0) { listEl.innerHTML = '<div class="lb-loading">No rated games played yet.</div>'; return; }
+  rows.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  const top10 = rows.slice(0, 10);
   listEl.innerHTML = '';
-  rows.forEach((p, i) => {
-    const rank = i + 1, isMe = p.id === myPlayerId;
+  top10.forEach((p, i) => {
+    const rank    = i + 1;
+    const isMe    = p.id === myPlayerId;
     const rankCls = rank===1?'top1':rank===2?'top2':rank===3?'top3':'';
-    const row = document.createElement('div');
+    const row     = document.createElement('div');
     row.className = 'lb-row' + (isMe ? ' me' : '');
     row.innerHTML =
       '<span class="lb-col-rank ' + rankCls + '">' + rank + '</span>' +
-      '<span class="lb-col-name">' + (isMe?'★ ':'') + (p.username||'Unknown') + '</span>' +
-      '<span class="lb-col-rating">' + (p.rating||STARTING_RATING) + '</span>' +
-      '<span class="lb-col-record"><span class="w">'+(p.wins||0)+'W</span> '+(p.draws||0)+'D <span class="l">'+(p.losses||0)+'L</span></span>';
+      '<span class="lb-col-name">' + (isMe ? '★ ' : '') + (p.username || 'Unknown') + '</span>' +
+      '<span class="lb-col-rating">' + (p.rating || STARTING_RATING) + '</span>' +
+      '<span class="lb-col-record"><span class="w">' + (p.wins||0) + 'W</span> ' +
+      (p.draws||0) + 'D <span class="l">' + (p.losses||0) + 'L</span></span>';
     listEl.appendChild(row);
   });
 }
@@ -450,12 +459,13 @@ async function quickMatch() {
     roomRef  = db.ref('rooms/' + roomId);
     myPlayer = joinerSeat;
 
-    await roomRef.child('players/' + joinerSeat).set(true);
-    await roomRef.child('status').set('playing');
-    await roomRef.child('usernameGuest').set(myUsername);
+    // Write guest metadata BEFORE filling seat so host reads it in startOnlineGame
     const guestProfile = await loadProfile(myPlayerId);
     await roomRef.child('guestId').set(myPlayerId);
     await roomRef.child('guestRating').set(guestProfile.rating);
+    await roomRef.child('usernameGuest').set(myUsername);
+    await roomRef.child('status').set('playing');
+    await roomRef.child('players/' + joinerSeat).set(true);
     roomRef.child('players/' + joinerSeat).onDisconnect().set(false);
 
     startOnlineGame();
@@ -556,12 +566,13 @@ async function joinRoom() {
   roomRef  = db.ref('rooms/' + roomId);
   myPlayer = joinerSeat;
 
-  await roomRef.child('players/' + joinerSeat).set(true);
-  await roomRef.child('status').set('playing');
-  await roomRef.child('usernameGuest').set(myUsername);
+  // Write guest metadata BEFORE filling seat so host reads it in startOnlineGame
   const guestProf = await loadProfile(myPlayerId);
   await roomRef.child('guestId').set(myPlayerId);
   await roomRef.child('guestRating').set(guestProf.rating);
+  await roomRef.child('usernameGuest').set(myUsername);
+  await roomRef.child('status').set('playing');
+  await roomRef.child('players/' + joinerSeat).set(true);
   roomRef.child('players/' + joinerSeat).onDisconnect().set(false);
 
   startOnlineGame();
@@ -638,11 +649,16 @@ async function startOnlineGame() {
 
   buildGrid();
 
-  // Listen for username of late-joining guest (if we're the host and they join after)
+  // Listen for username/rating of late-joining guest
   roomRef.child('usernameGuest').on('value', snap => {
     if (snap.exists()) {
       names[guestSeat] = snap.val();
       document.getElementById('pc-name-' + guestSeat.toLowerCase()).textContent = snap.val();
+    }
+  });
+  roomRef.child('guestRating').on('value', snap => {
+    if (snap.exists() && rdata.ranked) {
+      document.getElementById('pc-rating-' + guestSeat.toLowerCase()).textContent = snap.val() + ' pts';
     }
   });
 
@@ -668,7 +684,9 @@ async function startOnlineGame() {
     const opponent = myPlayer === 'X' ? 'O' : 'X';
     if (players[opponent] === false && !outerWinner) {
       clearInactivityTimer();
+      outerWinner = myPlayer; // treat as win for remaining player
       showEndOverlay('oppleft');
+      roomRef.get().then(s => settleRating(s.val(), myPlayer).then(d => showRatingDelta(d)));
     }
   });
 
@@ -678,12 +696,15 @@ async function startOnlineGame() {
     const { loser } = snap.val();
     if (!outerWinner) {
       clearInactivityTimer();
-      outerWinner = loser === 'X' ? 'O' : 'X'; // winner is the other player
-      if (myPlayer === outerWinner) {
+      outerWinner = loser === 'X' ? 'O' : 'X';
+      const youWon = myPlayer === outerWinner;
+      if (youWon) {
         showEndOverlay('win', 'Opponent ran out of time!');
       } else {
         showEndOverlay('loss', 'You ran out of time.');
       }
+      // Settle rating — treat forfeit as a normal win/loss
+      roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d)));
     }
   });
 
