@@ -121,11 +121,11 @@ body::after {
 /* ── Game Title ──────────────────────────────────────────────────────────── */
 .game-title {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 2px;
   margin-bottom: 4px;
-  white-space: nowrap;
 }
 
 .title-main {
@@ -138,19 +138,8 @@ body::after {
 }
 
 .title-two {
-  display: flex;
-  align-items: center;
-  background: linear-gradient(135deg, var(--active-glow), var(--o-color));
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-  position: relative;
-}
-
-/* Subtle divider between main title and Two */
-.title-two::before {
-  content: '·';
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 2.2rem;
-  margin-right: 10px;
+  display: block;
+  text-align: center;
   background: linear-gradient(135deg, var(--active-glow), var(--o-color));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
@@ -158,8 +147,8 @@ body::after {
 .title-two-inner {
   font-family: 'Playfair Display', serif;
   font-style: italic;
-  font-size: 2.6rem;
-  letter-spacing: 0.02em;
+  font-size: 2.8rem;
+  letter-spacing: 0.04em;
   line-height: 1;
 }
 .subtitle { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.25em; text-transform: uppercase; margin-top: 4px; margin-bottom: 22px; }
@@ -433,28 +422,96 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 .end-actions { display:flex; gap:10px; justify-content:center; }
 
 /* ── Mobile adjustments ──────────────────────────────────────────────────── */
+/* ── Mobile (< 900px) ─────────────────────────────────────────────────────── */
 @media (max-width: 899px) {
-  /* Show scores inline as a row on mobile */
+  body { padding: 8px; justify-content: flex-start; }
+
+  #game-screen { height: 100dvh; overflow: hidden; justify-content: flex-start; }
+
+  .game-layout {
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    height: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Top row: both player cards side by side */
   .game-panel-left {
     flex-direction: row;
     justify-content: center;
-    gap: 10px;
+    gap: 6px;
     width: 100%;
+    flex-shrink: 0;
   }
   .game-panel-left .panel-title { display: none; }
-  .player-card { flex: 1; max-width: 160px; }
-  .game-panel-right { order: 3; width: 100%; }
-  .controls-vertical { flex-direction: row; justify-content: center; }
-  .controls-vertical button { width: auto; }
-  .room-info-bar { text-align: center; }
+
+  .player-card {
+    flex: 1;
+    max-width: 48%;
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .pc-symbol { font-size: 1.4rem; }
+  .pc-name   { font-size: 0.65rem; max-width: 90px; }
+  .pc-wins   { font-size: 0.52rem; }
+
+  /* Room code inline under player cards */
+  .room-info-bar {
+    text-align: center;
+    font-size: 0.52rem;
+    padding: 4px 8px;
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  /* Status bar compact */
+  .status-bar {
+    padding: 7px 12px;
+    min-width: unset;
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  .player-indicator { font-size: 0.65rem; }
+
+  /* Board: fill remaining space, never overflow */
+  .game-center {
+    gap: 6px;
+    width: 100%;
+    flex-shrink: 1;
+    align-items: center;
+  }
+
+  /* Auto-size cells so board fits in available width */
+  :root { --cell-size: clamp(26px, 9.5vw, 40px); }
+
+  .outer-grid { gap: 5px; padding: 7px; }
+  .inner-board { padding: 4px; }
+  .cell-grid { gap: 2px; }
+
+  .board-overlay-symbol { font-size: 2.4rem; }
+
+  .hint {
+    font-size: 0.5rem;
+    line-height: 1.5;
+    color: #2a2a2a;
+    flex-shrink: 0;
+  }
+
+  /* Right panel: buttons in a row at the bottom */
+  .game-panel-right { order: 99; width: 100%; flex-shrink: 0; }
+  .controls-vertical { flex-direction: row; justify-content: center; gap: 8px; }
+  .controls-vertical button { width: auto; font-size: 0.62rem; padding: 7px 16px; }
+
+  /* HTP button repositioned so it doesn't overlap */
+  .htp-trigger { bottom: 10px; right: 10px; font-size: 0.54rem; padding: 5px 9px; }
 }
 
-@media (max-width: 500px) {
-  :root { --cell-size: 34px; }
-  .board-overlay-symbol { font-size: 2.8rem; }
-  .lobby-box { padding: 28px 20px; }
-  .room-code { font-size: 2.2rem; }
-  .htp-trigger { bottom: 12px; right: 12px; font-size: 0.56rem; padding: 6px 10px; }
-  .player-card { padding: 8px 10px; }
-  .pc-symbol { font-size: 1.5rem; }
+/* ── Very small phones (< 390px) ─────────────────────────────────────────── */
+@media (max-width: 389px) {
+  :root { --cell-size: clamp(24px, 8.5vw, 34px); }
+  .lobby-box { padding: 24px 16px; }
+  .room-code { font-size: 2rem; }
 }
