@@ -50,6 +50,7 @@ let myQueueRef      = null;
 let gameListener    = null;
 let scoresListener  = null;
 let playersListener = null;
+let readyListener   = null;
 const mySessionId   = Math.random().toString(36).slice(2);
 
 // ─── Username ────────────────────────────────────────────────────────────────
@@ -724,6 +725,10 @@ async function leaveRoom() {
   hideEndOverlay();
   clearInactivityTimer();
   document.body.style.setProperty('--bg-tint', 'transparent');
+  // Remove our ready flag so opponent's button resets
+  if (roomRef && myPlayer) {
+    await roomRef.child('ready/' + myPlayer).remove();
+  }
   detachListeners();
 
   if (gameMode === 'online' && roomRef) {
@@ -747,8 +752,9 @@ function detachListeners() {
     if (gameListener)    roomRef.child('game').off('value', gameListener);
     if (scoresListener)  roomRef.child('scores').off('value', scoresListener);
     if (playersListener) roomRef.child('players').off('value', playersListener);
+    if (readyListener)   roomRef.child('ready').off('value', readyListener);
   }
-  gameListener = scoresListener = playersListener = null;
+  gameListener = scoresListener = playersListener = readyListener = null;
 }
 
 // ─── Start Online Game ────────────────────────────────────────────────────────
@@ -801,6 +807,12 @@ async function startOnlineGame() {
     if (!snap.exists()) return;
     const gameData = snap.val();
     deserializeGame(gameData);
+
+    // Reset New Game button in case it was in waiting state
+    const btn = document.getElementById('end-newgame-btn');
+    if (btn) { btn.textContent = '↺  New Game'; btn.disabled = false; }
+    hideEndOverlay();
+
     render();
     if (!outerWinner) startInactivityTimer(gameData.lastMoveAt || Date.now());
     else clearInactivityTimer();
@@ -841,6 +853,19 @@ async function startOnlineGame() {
       }
       // Settle rating — treat forfeit as a normal win/loss
       if (isRanked) roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d)));
+    }
+  });
+
+  // Listen for both players clicking New Game
+  readyListener = roomRef.child('ready').on('value', async snap => {
+    if (!snap.exists()) return;
+    const ready = snap.val();
+    // Both players ready — reset the game
+    if (ready.X === true && ready.O === true) {
+      await roomRef.child('ready').remove();
+      await roomRef.child('forfeit').remove();
+      await roomRef.child('ratingSettled').remove();
+      await roomRef.child('game').set(serializeGame(initialGameState()));
     }
   });
 
@@ -1113,23 +1138,30 @@ function applyMove(b, c) {
 
 // ─── Restart ──────────────────────────────────────────────────────────────────
 async function restartGame() {
-  hideEndOverlay();
-  clearInactivityTimer();
   const deltaEl = document.getElementById('end-rating-delta');
   if (deltaEl) deltaEl.classList.add('hidden');
-  // Refresh lobby rating badge so it shows new rating if user goes home
   if (isRanked) refreshLobbyRating();
-  // Clear forfeit flag so new game is clean
-  if (gameMode === 'online' && roomRef) await roomRef.child('forfeit').remove();
   document.body.style.setProperty('--bg-tint', 'transparent');
+
   if (gameMode === 'local') {
+    hideEndOverlay();
+    clearInactivityTimer();
     resetGameState();
     buildGrid();
     render();
-  } else {
-    if (!roomRef) return;
-    await roomRef.child('game').set(serializeGame(initialGameState()));
+    return;
   }
+
+  // Online: require mutual consent — set our ready flag and wait
+  if (!roomRef) return;
+
+  const btn = document.getElementById('end-newgame-btn');
+  btn.textContent  = '⏳ Waiting for opponent...';
+  btn.disabled     = true;
+
+  await roomRef.child('ready/' + myPlayer).set(true);
+  // The readyListener in startOnlineGame handles the actual reset
+  // when both players have clicked
 }
 
 // ─── Win Helpers ──────────────────────────────────────────────────────────────
