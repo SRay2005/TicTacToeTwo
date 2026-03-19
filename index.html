@@ -9,28 +9,80 @@
 </head>
 <body>
 
+  <!-- ── How To Play Modal ─────────────────────────────────────────── -->
+  <div id="htp-modal" class="modal-backdrop hidden" onclick="closeHTP(event)">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeHTPBtn()">✕</button>
+      <h2 class="modal-title">How to Play</h2>
+
+      <div class="htp-section">
+        <div class="htp-tag">The Board</div>
+        <p>A 3×3 grid of mini tic-tac-toe boards. Win 3 mini boards in a row to win the game.</p>
+      </div>
+
+      <div class="htp-section">
+        <div class="htp-tag">The Rule</div>
+        <p>Where you play <em>inside</em> a mini board determines which mini board your opponent must play in next.</p>
+        <div class="htp-example">
+          Play in the <span class="hx">top-left cell</span> of any board
+          → opponent must play in the <span class="hx">top-left board</span>
+        </div>
+      </div>
+
+      <div class="htp-section">
+        <div class="htp-tag">Free Choice</div>
+        <p>If the board you're sent to is already won or drawn, you may play in <em>any</em> open board.</p>
+      </div>
+
+      <div class="htp-section">
+        <div class="htp-tag">Winning</div>
+        <p>Claim a mini board by getting 3 in a row inside it. Get 3 claimed boards in a row on the outer grid to win.</p>
+      </div>
+
+      <div class="htp-legend">
+        <div class="legend-item"><span class="legend-dot glow"></span> Yellow border = board you must play in</div>
+        <div class="legend-item"><span class="legend-dot faint"></span> Faint yellow = any board is valid</div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Lobby Screen ───────────────────────────────────────────────── -->
   <div id="lobby-screen">
+
+    <button class="htp-trigger" onclick="openHTP()">? How to Play</button>
+
     <div class="lobby-box">
-
       <h1>Tic · Tac · Toe · Two</h1>
-      <p class="subtitle">Online Multiplayer</p>
+      <p class="subtitle">The Ultimate Tic-Tac-Toe</p>
 
-      <!-- Main lobby actions -->
+      <!-- Main lobby -->
       <div id="lobby-main">
-        <button class="lobby-btn quickmatch" onclick="quickMatch()">⚡ &nbsp;Quick Match</button>
-        <p class="lobby-hint-small">Play instantly with a random opponent</p>
-        <div class="lobby-divider">— or play with a friend —</div>
-        <button class="lobby-btn primary" onclick="createRoom()">Create Room</button>
-        <div class="lobby-or">or</div>
-        <div class="join-row">
-          <input id="join-input" type="text" placeholder="ENTER CODE" maxlength="6" />
-          <button class="lobby-btn" onclick="joinRoom()">Join</button>
+
+        <div class="mode-group">
+          <div class="mode-label">Play Online</div>
+          <button class="lobby-btn quickmatch" onclick="quickMatch()">⚡ &nbsp;Quick Match</button>
+          <p class="lobby-hint-small">Get matched with a random opponent instantly</p>
+          <div class="lobby-or">or</div>
+          <button class="lobby-btn primary" onclick="createRoom()">Create Private Room</button>
+          <div class="lobby-or">or</div>
+          <div class="join-row">
+            <input id="join-input" type="text" placeholder="ENTER CODE" maxlength="6" />
+            <button class="lobby-btn" onclick="joinRoom()">Join</button>
+          </div>
         </div>
+
+        <div class="mode-divider"></div>
+
+        <div class="mode-group">
+          <div class="mode-label">Play Locally</div>
+          <button class="lobby-btn local" onclick="startPassAndPlay()">🤝 &nbsp;Pass &amp; Play</button>
+          <p class="lobby-hint-small">Two players on the same device</p>
+        </div>
+
         <p id="lobby-error" class="lobby-error"></p>
       </div>
 
-      <!-- Searching for opponent (matchmaking) -->
+      <!-- Searching (matchmaking) -->
       <div id="lobby-searching" class="hidden">
         <div class="searching-icon">⚡</div>
         <p class="waiting-label">Finding an opponent</p>
@@ -39,7 +91,7 @@
         <button class="lobby-btn small" onclick="cancelMatchmaking()">Cancel</button>
       </div>
 
-      <!-- Waiting for friend (private room) -->
+      <!-- Waiting for friend -->
       <div id="lobby-waiting" class="hidden">
         <p class="waiting-label">Room Code</p>
         <div id="room-code-display" class="room-code"></div>
@@ -54,12 +106,14 @@
   <!-- ── Game Screen ────────────────────────────────────────────────── -->
   <div id="game-screen" class="hidden">
 
+    <button class="htp-trigger in-game" onclick="openHTP()">? How to Play</button>
+
     <header>
       <h1>Tic · Tac · Toe · Two</h1>
-      <p class="subtitle">Ultimate Edition &mdash; Every move matters</p>
+      <p class="subtitle" id="game-subtitle"></p>
     </header>
 
-    <div class="room-info-bar">
+    <div class="room-info-bar" id="room-info-bar">
       <span id="room-info-label"></span>
       <span id="my-player-label"></span>
       <button class="lobby-btn small" onclick="leaveRoom()">Leave</button>
@@ -67,11 +121,11 @@
 
     <div class="scores">
       <div class="score-box">
-        <div class="score-label">X — Wins</div>
+        <div class="score-label" id="score-label-x">X — Wins</div>
         <div class="score-val x" id="score-x">0</div>
       </div>
       <div class="score-box">
-        <div class="score-label">O — Wins</div>
+        <div class="score-label" id="score-label-o">O — Wins</div>
         <div class="score-val o" id="score-o">0</div>
       </div>
     </div>
@@ -94,7 +148,6 @@
 
   </div>
 
-  <!-- Firebase SDK (compat v10) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="game.js"></script>
