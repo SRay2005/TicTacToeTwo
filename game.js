@@ -263,12 +263,18 @@ async function joinAsO(targetRoomId) {
   const snap = await db.ref(`rooms/${targetRoomId}`).get();
   if (!snap.exists()) { await quickMatch(); return; }
 
-  const data       = snap.val();
-  const creatorSeat = data.creatorPlayer || 'X';   // fallback for private rooms
-  const joinerSeat  = creatorSeat === 'X' ? 'O' : 'X';
+  const data = snap.val();
 
-  // If the joiner seat is already taken, try again
-  if (data.players[joinerSeat] === true) { await quickMatch(); return; }
+  // Find whichever seat is open — don't trust creatorPlayer calculation
+  let joinerSeat = null;
+  if (data.players.X === false) joinerSeat = 'X';
+  else if (data.players.O === false) joinerSeat = 'O';
+
+  if (!joinerSeat) {
+    // Both seats are taken — this room is full, try again
+    await quickMatch();
+    return;
+  }
 
   roomId   = targetRoomId;
   roomRef  = db.ref(`rooms/${roomId}`);
@@ -277,6 +283,8 @@ async function joinAsO(targetRoomId) {
   await roomRef.child(`players/${joinerSeat}`).set(true);
   await roomRef.child('status').set('playing');
   roomRef.child(`players/${joinerSeat}`).onDisconnect().set(false);
+
+  // Always call startOnlineGame — we successfully joined
   startOnlineGame();
 }
 
