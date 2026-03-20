@@ -400,11 +400,15 @@ async function settleRating(roomData, winner) {
 
 function showInstantDelta(winner) {
   if (!myPlayer || !isRanked) return;
-  const outcome  = winner === 'D' ? 0.5 : winner === myPlayer ? 1 : 0;
-  const drawFlat = winner === 'D' && Math.abs(myGameRating - oppGameRating) < DRAW_DIFF_THRESH;
-  const delta    = drawFlat ? 0 : calcEloDelta(myGameRating, oppGameRating, outcome);
-  showRatingDelta(delta);
-  myGameRating = Math.max(0, myGameRating + delta);
+  const outcome    = winner === 'D' ? 0.5 : winner === myPlayer ? 1 : 0;
+  const oppOutcome = 1 - outcome;
+  const drawFlat   = winner === 'D' && Math.abs(myGameRating - oppGameRating) < DRAW_DIFF_THRESH;
+  const myDelta    = drawFlat ? 0 : calcEloDelta(myGameRating, oppGameRating, outcome);
+  const oppDelta   = drawFlat ? 0 : calcEloDelta(oppGameRating, myGameRating, oppOutcome);
+  showRatingDelta(myDelta);
+  // Update both cached ratings so rematch ELO is calculated from correct post-game values
+  myGameRating  = Math.max(0, myGameRating  + myDelta);
+  oppGameRating = Math.max(0, oppGameRating + oppDelta);
 }
 
 async function showRatingDelta(delta) {
