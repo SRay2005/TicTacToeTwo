@@ -522,6 +522,8 @@ function clearInactivityTimer() {
 const WINS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
 let currentPlayer = 'X';
+let lastMoveB     = -1; // board index of last move
+let lastMoveC     = -1; // cell index of last move
 let boards      = Array.from({ length: 9 }, () => Array(9).fill(null));
 let boardWinner = Array(9).fill(null);
 let outerWinner = null;
@@ -750,6 +752,8 @@ function resetGameState() {
   activeBoard   = -1;
   moveCount     = 0;
   ratingShown   = false;
+  lastMoveB     = -1;
+  lastMoveC     = -1;
 }
 
 function initialGameState() {
@@ -771,6 +775,8 @@ function serializeGame(state) {
     activeBoard:   state.activeBoard,
     currentPlayer: state.currentPlayer,
     moveCount:     state.moveCount,
+    lastMoveB:     state.lastMoveB !== undefined ? state.lastMoveB : -1,
+    lastMoveC:     state.lastMoveC !== undefined ? state.lastMoveC : -1,
     lastMoveAt:    firebase.database.ServerValue.TIMESTAMP
   };
 }
@@ -781,7 +787,9 @@ function deserializeGame(data) {
   outerWinner   = data.outerWinner || null;
   activeBoard   = data.activeBoard;
   currentPlayer = data.currentPlayer;
-  moveCount     = data.moveCount;
+  moveCount = data.moveCount;
+  lastMoveB = (data.lastMoveB !== undefined) ? data.lastMoveB : -1;
+  lastMoveC = (data.lastMoveC !== undefined) ? data.lastMoveC : -1;
 }
 
 function setLobbyError(msg) {
@@ -1303,6 +1311,7 @@ function render() {
       if (val) {
         cellEl.classList.add('taken', val === 'X' ? 'x-cell' : 'o-cell');
         if (winningCells.includes(c)) cellEl.classList.add('winning-cell');
+        if (b === lastMoveB && c === lastMoveC) cellEl.classList.add('last-move');
         cellEl.innerHTML = `<span class="cell-symbol">${val}</span>`;
       } else {
         cellEl.textContent = '';
@@ -1473,7 +1482,8 @@ async function handleClick(b, c) {
 
   if (gameMode === 'online') {
     await roomRef.child('game').set(serializeGame({
-      boards, boardWinner, outerWinner, activeBoard, currentPlayer, moveCount
+      boards, boardWinner, outerWinner, activeBoard, currentPlayer, moveCount,
+      lastMoveB, lastMoveC
     }));
     if (outerWinner) {
       await roomRef.child('scores').set(scores);
@@ -1496,6 +1506,8 @@ async function handleClick(b, c) {
 }
 
 function applyMove(b, c) {
+  lastMoveB = b;
+  lastMoveC = c;
   boards[b][c] = currentPlayer;
   moveCount++;
 
