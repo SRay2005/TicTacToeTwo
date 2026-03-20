@@ -56,7 +56,9 @@ const mySessionId   = Math.random().toString(36).slice(2);
 // ─── Username ────────────────────────────────────────────────────────────────
 let myUsername = localStorage.getItem('ttt2_username') || '';
 // names[player] e.g. names['X'] = 'Alice'
-let names = { X: '—', O: '—' };
+let names   = { X: '—', O: '—' };
+let myName  = '';   // my display name — never changes on seat swap
+let oppName = '';   // opponent display name — never changes on seat swap
 
 // ─── Guest Mode ──────────────────────────────────────────────────────────────
 let isGuest = false;
@@ -1062,13 +1064,17 @@ async function startOnlineGame() {
   // Always sync isRanked from the room data — single source of truth
   isRanked = rdata.ranked === true;
 
-  const hostUser  = rdata.usernameHost  || 'Host';
-  const guestUser = rdata.usernameGuest || 'Guest';
+  const hostUser  = rdata.usernameHost  || 'Unknown';
+  const guestUser = rdata.usernameGuest || 'Unknown';
   const hostSeat  = rdata.creatorPlayer || 'X';
   const guestSeat = hostSeat === 'X' ? 'O' : 'X';
 
-  names[hostSeat]  = hostUser;
-  names[guestSeat] = guestUser;
+  // Cache names permanently — these never change regardless of seat swaps
+  myName  = (myPlayer === hostSeat) ? hostUser  : guestUser;
+  oppName = (myPlayer === hostSeat) ? guestUser : hostUser;
+
+  names[myPlayer]                         = myName;
+  names[myPlayer === 'X' ? 'O' : 'X']    = oppName;
 
   document.getElementById('pc-name-x').textContent = names.X;
   document.getElementById('pc-name-o').textContent = names.O;
@@ -1204,33 +1210,25 @@ async function startOnlineGame() {
     const ready    = snap.exists() ? snap.val() : {};
     const opponent = myPlayer === 'X' ? 'O' : 'X';
 
-    // Both players ready — always swap seats on rematch so it stays fair
+    // Both players ready — swap seats and start new game
     if (ready.X === true && ready.O === true) {
       oppWasReady = false;
       ratingShown = false;
 
-      // Simple: always flip myPlayer — both clients do this identically
-      // (X becomes O, O becomes X — deterministic, no coordination needed)
+      // Simply flip myPlayer — both clients do this identically and simultaneously.
+      // myName/oppName stay fixed to the actual players, not the seats.
       myPlayer = myPlayer === 'X' ? 'O' : 'X';
 
-      // Update the label
-      const labelEl = document.getElementById('my-player-label');
-      if (labelEl) labelEl.textContent = 'You are: ' + myPlayer;
+      // Rebuild names dict from cached myName/oppName (never changes)
+      names[myPlayer]                      = myName;
+      names[myPlayer === 'X' ? 'O' : 'X'] = oppName;
 
-      // Swap names on cards
-      const tmpName = names.X;
-      names.X = names.O;
-      names.O = tmpName;
+      // Update cards
       document.getElementById('pc-name-x').textContent = names.X;
       document.getElementById('pc-name-o').textContent = names.O;
-
-      // Swap cached ratings
-      const tmpRating = myGameRating;
-      myGameRating    = oppGameRating;
-      oppGameRating   = tmpRating;
       if (isRanked) {
-        document.getElementById('pc-rating-x').textContent = (names.X === (myUsername||'You') ? myGameRating : oppGameRating) + ' pts';
-        document.getElementById('pc-rating-o').textContent = (names.O === (myUsername||'You') ? myGameRating : oppGameRating) + ' pts';
+        document.getElementById('pc-rating-' + myPlayer.toLowerCase()).textContent          = myGameRating  + ' pts';
+        document.getElementById('pc-rating-' + (myPlayer==='X'?'o':'x')).textContent       = oppGameRating + ' pts';
       }
 
       await roomRef.child('ready').remove();
