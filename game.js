@@ -398,6 +398,15 @@ async function settleRating(roomData, winner) {
   return null;
 }
 
+function showInstantDelta(winner) {
+  if (!myPlayer || !isRanked) return;
+  const outcome  = winner === 'D' ? 0.5 : winner === myPlayer ? 1 : 0;
+  const drawFlat = winner === 'D' && Math.abs(myGameRating - oppGameRating) < DRAW_DIFF_THRESH;
+  const delta    = drawFlat ? 0 : calcEloDelta(myGameRating, oppGameRating, outcome);
+  showRatingDelta(delta);
+  myGameRating = Math.max(0, myGameRating + delta);
+}
+
 async function showRatingDelta(delta) {
   if (delta === null || delta === undefined) return;
   const el = document.getElementById('end-rating-delta');
@@ -517,7 +526,9 @@ let boards      = Array.from({ length: 9 }, () => Array(9).fill(null));
 let boardWinner = Array(9).fill(null);
 let outerWinner = null;
 let activeBoard = -1;
-let ratingShown = false;
+let ratingShown   = false;
+let myGameRating  = STARTING_RATING;
+let oppGameRating = STARTING_RATING;
 let scores      = { X: 0, O: 0 };
 let moveCount   = 0;
 
@@ -1053,8 +1064,12 @@ async function startOnlineGame() {
   document.getElementById('score-x').textContent = scores.X || 0;
   document.getElementById('score-o').textContent = scores.O || 0;
   if (rdata.ranked) {
-    document.getElementById('pc-rating-' + hostSeat.toLowerCase()).textContent  = (rdata.hostRating  || STARTING_RATING) + ' pts';
-    document.getElementById('pc-rating-' + guestSeat.toLowerCase()).textContent = (rdata.guestRating || STARTING_RATING) + ' pts';
+    const hRat = rdata.hostRating  || STARTING_RATING;
+    const gRat = rdata.guestRating || STARTING_RATING;
+    document.getElementById('pc-rating-' + hostSeat.toLowerCase()).textContent  = hRat + ' pts';
+    document.getElementById('pc-rating-' + guestSeat.toLowerCase()).textContent = gRat + ' pts';
+    myGameRating  = (myPlayer === hostSeat) ? hRat : gRat;
+    oppGameRating = (myPlayer === hostSeat) ? gRat : hRat;
   } else {
     document.getElementById('pc-rating-x').textContent = 'Unranked';
     document.getElementById('pc-rating-o').textContent = 'Unranked';
@@ -1142,7 +1157,7 @@ async function startOnlineGame() {
           outerWinner = myPlayer;
           setIngameNewGameVisible(true);
           showEndOverlay('oppleft');
-          if (isRanked && !ratingShown) { ratingShown = true; roomRef.get().then(s => settleRating(s.val(), myPlayer).then(d => showRatingDelta(d))); }
+          if (isRanked && !ratingShown) { ratingShown = true; showInstantDelta(myPlayer); roomRef.get().then(s => settleRating(s.val(), myPlayer)); }
         }
       }, 8000);
     } else if (players[opponent] === true && oppLeftTimer) {
@@ -1167,7 +1182,7 @@ async function startOnlineGame() {
         showEndOverlay('loss', 'You ran out of time.');
       }
       // Settle rating — treat forfeit as a normal win/loss
-      if (isRanked && !ratingShown) { ratingShown = true; roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d))); }
+      if (isRanked && !ratingShown) { ratingShown = true; showInstantDelta(outerWinner); roomRef.get().then(s => settleRating(s.val(), outerWinner)); }
     }
   });
 
@@ -1180,7 +1195,7 @@ async function startOnlineGame() {
     // Both players ready — reset the game
     if (ready.X === true && ready.O === true) {
       oppWasReady = false;
-      ratingShown = false; // allow rating delta to show in the new game
+      ratingShown = false; // oppGameRating updated by showInstantDelta for rematch
       await roomRef.child('ready').remove();
       await roomRef.child('forfeit').remove();
       await roomRef.child('ratingSettled').remove();
@@ -1381,7 +1396,7 @@ function renderStatus() {
     el.innerHTML = `<span class="win-banner" style="color:#888">DRAW</span>`;
     setIngameNewGameVisible(true);
     showEndOverlay('draw');
-    if (gameMode === 'online' && isRanked && !ratingShown) { ratingShown = true; roomRef.get().then(s => settleRating(s.val(),'D').then(d => showRatingDelta(d))); }
+    if (gameMode === 'online' && isRanked && !ratingShown) { ratingShown = true; showInstantDelta('D'); roomRef.get().then(s => settleRating(s.val(), 'D')); }
     return;
   }
 
@@ -1401,7 +1416,7 @@ function renderStatus() {
       el.innerHTML = `<span class="win-banner" style="color:${col}">${youWon ? 'YOU WIN!' : 'OPPONENT WINS!'}</span>`;
       setIngameNewGameVisible(true);
       showEndOverlay(youWon ? 'win' : 'loss');
-      if (isRanked && !ratingShown) { ratingShown = true; roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d))); }
+      if (isRanked && !ratingShown) { ratingShown = true; showInstantDelta(outerWinner); roomRef.get().then(s => settleRating(s.val(), outerWinner)); }
     }
     return;
   }
