@@ -1209,46 +1209,31 @@ async function startOnlineGame() {
       oppWasReady = false;
       ratingShown = false;
 
-      // Only one client should write the seat swap — use a transaction
-      let iWroteSeats = false;
-      await roomRef.child('rematchSeats').transaction(cur => {
-        if (cur !== null) return cur; // already written
-        iWroteSeats = true;
-        // Always swap: flip creatorPlayer so both clients re-derive correctly
-        const currentCreator = (roomRef._delegate?._path?.pieces_ || []).length > 0
-          ? null : null; // fallback below
-        return 'pending'; // placeholder — actual swap written below
-      });
+      // Read current room state
+      const rs  = await roomRef.get();
+      const rd  = rs.val() || {};
+      const currentCreator = rd.creatorPlayer || 'X';
+      const newCreator     = currentCreator === 'X' ? 'O' : 'X';
 
-      if (iWroteSeats) {
-        // Read current creatorPlayer and flip it
-        const rs = await roomRef.get();
-        const currentCreator = (rs.val() || {}).creatorPlayer || 'X';
-        const newCreator     = currentCreator === 'X' ? 'O' : 'X';
-        // Write the new seat map keyed by playerId
-        const rd = rs.val() || {};
-        const hostId_  = rd.hostId  || '';
-        const guestId_ = rd.guestId || '';
-        const seats = {};
-        if (hostId_)  seats[hostId_]  = newCreator;
-        if (guestId_) seats[guestId_] = newCreator === 'X' ? 'O' : 'X';
-        await roomRef.child('rematchSeats').set(seats);
+      // Only the original host writes the new creatorPlayer to Firebase
+      // (prevents double-write; guest just reads what host wrote)
+      const amIOriginalHost = (rd.hostId === myPlayerId);
+      if (amIOriginalHost) {
         await roomRef.child('creatorPlayer').set(newCreator);
       }
 
-      // Read the assigned seat for this player
-      const seatsSnap = await roomRef.child('rematchSeats').get();
-      if (seatsSnap.exists()) {
-        const seatMap = seatsSnap.val();
-        const newSeat = seatMap[myPlayerId];
-        if (newSeat && newSeat !== myPlayer) {
-          myPlayer = newSeat;
-          // Swap names dict
-          const tmp = names.X; names.X = names.O; names.O = tmp;
-        }
-      }
+      // Both clients derive their own seat deterministically:
+      // host always gets newCreator, guest always gets the opposite
+      const myNewSeat = amIOriginalHost ? newCreator : (newCreator === 'X' ? 'O' : 'X');
+      myPlayer = myNewSeat;
 
-      // Update UI
+      // Rebuild names dict from scratch using usernames stored in room
+      const hostUser  = rd.usernameHost  || 'Host';
+      const guestUser = rd.usernameGuest || 'Guest';
+      names[newCreator]                    = hostUser;
+      names[newCreator === 'X' ? 'O' : 'X'] = guestUser;
+
+      // Update all UI
       document.getElementById('pc-name-x').textContent = names.X;
       document.getElementById('pc-name-o').textContent = names.O;
       if (isRanked) {
@@ -1259,7 +1244,6 @@ async function startOnlineGame() {
       await roomRef.child('ready').remove();
       await roomRef.child('forfeit').remove();
       await roomRef.child('ratingSettled').remove();
-      await roomRef.child('rematchSeats').remove();
       await roomRef.child('game').set(serializeGame(initialGameState()));
       return;
     }
