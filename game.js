@@ -1053,16 +1053,32 @@ async function startOnlineGame() {
     document.getElementById('score-o').textContent = scores.O;
   });
 
+  let oppLeftTimer = null; // grace-period timer for network switches
+
   playersListener = roomRef.child('players').on('value', snap => {
     if (!snap.exists()) return;
     const players  = snap.val();
     const opponent = myPlayer === 'X' ? 'O' : 'X';
+
     if (players[opponent] === false && !outerWinner) {
-      clearInactivityTimer();
-      outerWinner = myPlayer; // treat as win for remaining player
-      setIngameNewGameVisible(true);
-      showEndOverlay('oppleft');
-      if (isRanked) roomRef.get().then(s => settleRating(s.val(), myPlayer).then(d => showRatingDelta(d)));
+      // Give opponent 8 seconds to reconnect (covers WiFi → mobile handoff)
+      if (oppLeftTimer) return; // already waiting
+      oppLeftTimer = setTimeout(async () => {
+        oppLeftTimer = null;
+        // Re-check: did they come back?
+        const reSnap = await roomRef.child('players/' + opponent).get();
+        if (reSnap.val() === false && !outerWinner) {
+          clearInactivityTimer();
+          outerWinner = myPlayer;
+          setIngameNewGameVisible(true);
+          showEndOverlay('oppleft');
+          if (isRanked) roomRef.get().then(s => settleRating(s.val(), myPlayer).then(d => showRatingDelta(d)));
+        }
+      }, 8000);
+    } else if (players[opponent] === true && oppLeftTimer) {
+      // Opponent reconnected within grace period — cancel the timer
+      clearTimeout(oppLeftTimer);
+      oppLeftTimer = null;
     }
   });
 
