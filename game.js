@@ -473,9 +473,12 @@ function closeHTP(e) {
 
 // ─── Pass & Play ──────────────────────────────────────────────────────────────
 function startPassAndPlay() {
-  gameMode  = 'local';
-  myPlayer  = null;
-  names     = { X: 'Player X', O: 'Player O' };
+  gameMode      = 'local';
+  myPlayer      = null;
+  cpuDifficulty = null;
+  cpuPlayer     = null;
+  cpuThinking   = false;
+  names         = { X: 'Player X', O: 'Player O' };
 
   resetGameState();
 
@@ -541,19 +544,20 @@ function startVsCPU(difficulty, playerSide) {
   isRanked  = false;
   names     = { [myPlayer]: myUsername || 'You', [cpuPlayer]: 'CPU (' + difficulty + ')' };
   resetGameState();
-  document.getElementById('cpu-difficulty').classList.add('hidden');
   document.getElementById('lobby-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
   document.getElementById('game-subtitle-left').textContent = 'vs CPU';
   document.getElementById('room-info-bar').classList.add('hidden');
   document.getElementById('pc-name-x').textContent = names.X;
   document.getElementById('pc-name-o').textContent = names.O;
-  document.getElementById('pc-rating-x').textContent = '';
-  document.getElementById('pc-rating-o').textContent = difficulty.toUpperCase();
+  document.getElementById('pc-rating-' + myPlayer.toLowerCase()).textContent = '';
+  document.getElementById('pc-rating-' + cpuPlayer.toLowerCase()).textContent = difficulty.toUpperCase();
   document.getElementById('score-x').textContent = '0';
   document.getElementById('score-o').textContent = '0';
   buildGrid();
   render();
+  // If player chose O, CPU is X and goes first
+  if (cpuPlayer === currentPlayer) scheduleCpuMove();
 }
 
 function scheduleCpuMove() {
