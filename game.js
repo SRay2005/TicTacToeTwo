@@ -1204,35 +1204,62 @@ async function startOnlineGame() {
     const ready    = snap.exists() ? snap.val() : {};
     const opponent = myPlayer === 'X' ? 'O' : 'X';
 
-    // Both players ready — always swap seats on rematch so it stays fair
+    // Both players ready — swap seats and start new game
     if (ready.X === true && ready.O === true) {
       oppWasReady = false;
       ratingShown = false;
 
-      // Simple: always flip myPlayer — both clients do this identically
-      // (X becomes O, O becomes X — deterministic, no coordination needed)
-      myPlayer = myPlayer === 'X' ? 'O' : 'X';
+      // Only one client should write the seat swap — use a transaction
+      let iWroteSeats = false;
+      await roomRef.child('rematchSeats').transaction(cur => {
+        if (cur !== null) return cur; // already written
+        iWroteSeats = true;
+        // Always swap: flip creatorPlayer so both clients re-derive correctly
+        const currentCreator = (roomRef._delegate?._path?.pieces_ || []).length > 0
+          ? null : null; // fallback below
+        return 'pending'; // placeholder — actual swap written below
+      });
 
-      // Update the label
-      const labelEl = document.getElementById('my-player-label');
-      if (labelEl) labelEl.textContent = 'You are: ' + myPlayer;
+      if (iWroteSeats) {
+        // Read current creatorPlayer and flip it
+        const rs = await roomRef.get();
+        const currentCreator = (rs.val() || {}).creatorPlayer || 'X';
+        const newCreator     = currentCreator === 'X' ? 'O' : 'X';
+        // Write the new seat map keyed by playerId
+        const rd = rs.val() || {};
+        const hostId_  = rd.hostId  || '';
+        const guestId_ = rd.guestId || '';
+        const seats = {};
+        if (hostId_)  seats[hostId_]  = newCreator;
+        if (guestId_) seats[guestId_] = newCreator === 'X' ? 'O' : 'X';
+        await roomRef.child('rematchSeats').set(seats);
+        await roomRef.child('creatorPlayer').set(newCreator);
+      }
 
-      // Swap names on cards
-      const tmpName = names.X;
-      names.X = names.O;
-      names.O = tmpName;
+      // Read the assigned seat for this player
+      const seatsSnap = await roomRef.child('rematchSeats').get();
+      if (seatsSnap.exists()) {
+        const seatMap = seatsSnap.val();
+        const newSeat = seatMap[myPlayerId];
+        if (newSeat && newSeat !== myPlayer) {
+          myPlayer = newSeat;
+          // Swap names dict
+          const tmp = names.X; names.X = names.O; names.O = tmp;
+        }
+      }
+
+      // Update UI
       document.getElementById('pc-name-x').textContent = names.X;
       document.getElementById('pc-name-o').textContent = names.O;
-
-      // Don't swap cached ratings — myGameRating always = my actual rating regardless of seat
       if (isRanked) {
-        document.getElementById('pc-rating-' + myPlayer.toLowerCase()).textContent                    = myGameRating  + ' pts';
-        document.getElementById('pc-rating-' + (myPlayer === 'X' ? 'o' : 'x')).textContent           = oppGameRating + ' pts';
+        document.getElementById('pc-rating-' + myPlayer.toLowerCase()).textContent               = myGameRating  + ' pts';
+        document.getElementById('pc-rating-' + (myPlayer === 'X' ? 'o' : 'x')).textContent      = oppGameRating + ' pts';
       }
 
       await roomRef.child('ready').remove();
       await roomRef.child('forfeit').remove();
       await roomRef.child('ratingSettled').remove();
+      await roomRef.child('rematchSeats').remove();
       await roomRef.child('game').set(serializeGame(initialGameState()));
       return;
     }
