@@ -230,7 +230,7 @@ function backToUsername() {
   pendingUsername = '';
 }
 
-async async function showLobbyMain(name) {
+async function showLobbyMain(name) {
   ['lobby-username','lobby-set-password','lobby-login-password'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
   document.getElementById('lobby-main').classList.remove('hidden');
@@ -279,14 +279,14 @@ async function loadProfile(playerId) {
 
 async function settleRating(roomData, winner) {
   if (!roomData || !roomData.ranked) return null;
-  const settledRef = roomRef.child('ratingSettled');
-  let didSettle = false;
-  await settledRef.transaction(cur => { if (cur) return; didSettle = true; return true; });
-  if (!didSettle) return null;
-  const hostId = roomData.hostId, guestId = roomData.guestId;
+  const hostId  = roomData.hostId;
+  const guestId = roomData.guestId;
   if (!hostId || !guestId) return null;
+
   const hostSeat  = roomData.creatorPlayer || 'X';
   const guestSeat = hostSeat === 'X' ? 'O' : 'X';
+
+  // Calculate deltas locally — both players can do this independently
   const [hostProf, guestProf] = await Promise.all([loadProfile(hostId), loadProfile(guestId)]);
   const hostOutcome  = getOutcome(winner, hostSeat);
   const guestOutcome = getOutcome(winner, guestSeat);
@@ -294,18 +294,42 @@ async function settleRating(roomData, winner) {
   let hostDelta  = calcEloDelta(hostProf.rating,  guestProf.rating, hostOutcome);
   let guestDelta = calcEloDelta(guestProf.rating, hostProf.rating,  guestOutcome);
   if (winner === 'D' && ratingDiff < DRAW_DIFF_THRESH) { hostDelta = 0; guestDelta = 0; }
-  const upd = {};
-  upd['players/' + hostId  + '/rating']   = Math.max(0, hostProf.rating  + hostDelta);
-  upd['players/' + hostId  + '/wins']     = hostProf.wins   + (hostOutcome  === 1   ? 1 : 0);
-  upd['players/' + hostId  + '/losses']   = hostProf.losses + (hostOutcome  === 0   ? 1 : 0);
-  upd['players/' + hostId  + '/draws']    = hostProf.draws  + (hostOutcome  === 0.5 ? 1 : 0);
-  upd['players/' + hostId  + '/username'] = roomData.usernameHost  || '';
-  upd['players/' + guestId + '/rating']   = Math.max(0, guestProf.rating + guestDelta);
-  upd['players/' + guestId + '/wins']     = guestProf.wins   + (guestOutcome === 1   ? 1 : 0);
-  upd['players/' + guestId + '/losses']   = guestProf.losses + (guestOutcome === 0   ? 1 : 0);
-  upd['players/' + guestId + '/draws']    = guestProf.draws  + (guestOutcome === 0.5 ? 1 : 0);
-  upd['players/' + guestId + '/username'] = roomData.usernameGuest || '';
-  await db.ref().update(upd);
+
+  // Use a transaction so only ONE player writes to Firebase (prevents double-counting)
+  // But BOTH players calculate and display their own delta
+  const settledRef = roomRef.child('ratingSettled');
+  let didSettle = false;
+  await settledRef.transaction(cur => {
+    if (cur) return; // already settled
+    didSettle = true;
+    return true;
+  });
+
+  if (didSettle) {
+    // We won the transaction — write both profiles using individual updates
+    // (avoids needing root-level write permission in Firebase rules)
+    const hostUpdates = {
+      rating:   Math.max(0, hostProf.rating  + hostDelta),
+      wins:     hostProf.wins   + (hostOutcome  === 1   ? 1 : 0),
+      losses:   hostProf.losses + (hostOutcome  === 0   ? 1 : 0),
+      draws:    hostProf.draws  + (hostOutcome  === 0.5 ? 1 : 0),
+      username: roomData.usernameHost  || hostProf.username || ''
+    };
+    const guestUpdates = {
+      rating:   Math.max(0, guestProf.rating + guestDelta),
+      wins:     guestProf.wins   + (guestOutcome === 1   ? 1 : 0),
+      losses:   guestProf.losses + (guestOutcome === 0   ? 1 : 0),
+      draws:    guestProf.draws  + (guestOutcome === 0.5 ? 1 : 0),
+      username: roomData.usernameGuest || guestProf.username || ''
+    };
+    // Write each player's profile separately — matches Firebase rules structure
+    await Promise.all([
+      db.ref('players/' + hostId).update(hostUpdates),
+      db.ref('players/' + guestId).update(guestUpdates)
+    ]);
+  }
+
+  // Both players return their own delta regardless of who wrote to Firebase
   if (myPlayerId === hostId)  return hostDelta;
   if (myPlayerId === guestId) return guestDelta;
   return null;
