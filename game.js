@@ -480,6 +480,7 @@ function startPassAndPlay() {
   cpuThinking   = false;
   names         = { X: 'Player X', O: 'Player O' };
 
+  document.getElementById('outer-win-svg').innerHTML = '';
   resetGameState();
 
   document.getElementById('lobby-screen').classList.add('hidden');
@@ -544,6 +545,7 @@ function startVsCPU(difficulty, playerSide) {
   isRanked  = false;
   names     = { [myPlayer]: myUsername || 'You', [cpuPlayer]: 'CPU (' + difficulty + ')' };
   resetGameState();
+  document.getElementById('outer-win-svg').innerHTML = '';
   document.getElementById('lobby-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
   document.getElementById('game-subtitle-left').textContent = 'vs CPU';
@@ -1101,16 +1103,36 @@ async function startOnlineGame() {
     }
   });
 
-  // Listen for both players clicking New Game
+  // Listen for ready / rematch state changes
   readyListener = roomRef.child('ready').on('value', async snap => {
-    if (!snap.exists()) return;
-    const ready = snap.val();
+    const ready = snap.exists() ? snap.val() : {};
+    const opponent = myPlayer === 'X' ? 'O' : 'X';
+
     // Both players ready — reset the game
     if (ready.X === true && ready.O === true) {
       await roomRef.child('ready').remove();
       await roomRef.child('forfeit').remove();
       await roomRef.child('ratingSettled').remove();
       await roomRef.child('game').set(serializeGame(initialGameState()));
+      return;
+    }
+
+    // Opponent pressed New Game — show notification on our end-overlay
+    if (ready[opponent] === true && !ready[myPlayer]) {
+      const notif = document.getElementById('rematch-notif');
+      if (notif) notif.classList.remove('hidden');
+    }
+
+    // Opponent's ready flag cleared (they went home) — notify us they declined
+    if (!ready[opponent] && ready[myPlayer] === true) {
+      const btn = document.getElementById('end-newgame-btn');
+      if (btn) {
+        btn.textContent = '✕ Opponent went home';
+        btn.disabled    = true;
+        btn.style.color = 'var(--muted)';
+      }
+      const notif = document.getElementById('rematch-notif');
+      if (notif) notif.classList.add('hidden');
     }
   });
 
@@ -1257,7 +1279,11 @@ function showEndOverlay(result, subtitle = '') {
 
 function hideEndOverlay() {
   document.getElementById('end-overlay').classList.add('hidden');
-  document.getElementById('end-newgame-btn').style.display = '';
+  const btn = document.getElementById('end-newgame-btn');
+  btn.style.display = ''; btn.disabled = false;
+  btn.style.color = ''; btn.textContent = '↺  New Game';
+  const notif = document.getElementById('rematch-notif');
+  if (notif) notif.classList.add('hidden');
 }
 
 function setIngameNewGameVisible(visible) {

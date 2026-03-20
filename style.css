@@ -684,6 +684,18 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 .end-subtitle { font-size:0.65rem; color:var(--muted); letter-spacing:0.14em; text-transform:uppercase; margin-bottom:28px; line-height:1.6; }
 .end-actions { display:flex; gap:10px; justify-content:center; }
 
+.rematch-notif {
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--active-glow);
+  border: 1px solid rgba(255,224,102,0.3);
+  background: rgba(255,224,102,0.06);
+  border-radius: 4px;
+  padding: 7px 14px;
+  margin-bottom: 12px;
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+
 /* ── Mobile adjustments ──────────────────────────────────────────────────── */
 /* Room info bar standalone (outside panel) */
 @media (min-width: 900px) {
