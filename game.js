@@ -1204,41 +1204,33 @@ async function startOnlineGame() {
     const ready    = snap.exists() ? snap.val() : {};
     const opponent = myPlayer === 'X' ? 'O' : 'X';
 
-    // Both players ready — swap seats and start new game
+    // Both players ready — always swap seats on rematch so it stays fair
     if (ready.X === true && ready.O === true) {
       oppWasReady = false;
       ratingShown = false;
 
-      // Read current room state
-      const rs  = await roomRef.get();
-      const rd  = rs.val() || {};
-      const currentCreator = rd.creatorPlayer || 'X';
-      const newCreator     = currentCreator === 'X' ? 'O' : 'X';
+      // Simple: always flip myPlayer — both clients do this identically
+      // (X becomes O, O becomes X — deterministic, no coordination needed)
+      myPlayer = myPlayer === 'X' ? 'O' : 'X';
 
-      // Only the original host writes the new creatorPlayer to Firebase
-      // (prevents double-write; guest just reads what host wrote)
-      const amIOriginalHost = (rd.hostId === myPlayerId);
-      if (amIOriginalHost) {
-        await roomRef.child('creatorPlayer').set(newCreator);
-      }
+      // Update the label
+      const labelEl = document.getElementById('my-player-label');
+      if (labelEl) labelEl.textContent = 'You are: ' + myPlayer;
 
-      // Both clients derive their own seat deterministically:
-      // host always gets newCreator, guest always gets the opposite
-      const myNewSeat = amIOriginalHost ? newCreator : (newCreator === 'X' ? 'O' : 'X');
-      myPlayer = myNewSeat;
-
-      // Rebuild names dict from scratch using usernames stored in room
-      const hostUser  = rd.usernameHost  || 'Host';
-      const guestUser = rd.usernameGuest || 'Guest';
-      names[newCreator]                    = hostUser;
-      names[newCreator === 'X' ? 'O' : 'X'] = guestUser;
-
-      // Update all UI
+      // Swap names on cards
+      const tmpName = names.X;
+      names.X = names.O;
+      names.O = tmpName;
       document.getElementById('pc-name-x').textContent = names.X;
       document.getElementById('pc-name-o').textContent = names.O;
+
+      // Swap cached ratings
+      const tmpRating = myGameRating;
+      myGameRating    = oppGameRating;
+      oppGameRating   = tmpRating;
       if (isRanked) {
-        document.getElementById('pc-rating-' + myPlayer.toLowerCase()).textContent               = myGameRating  + ' pts';
-        document.getElementById('pc-rating-' + (myPlayer === 'X' ? 'o' : 'x')).textContent      = oppGameRating + ' pts';
+        document.getElementById('pc-rating-x').textContent = (names.X === (myUsername||'You') ? myGameRating : oppGameRating) + ' pts';
+        document.getElementById('pc-rating-o').textContent = (names.O === (myUsername||'You') ? myGameRating : oppGameRating) + ' pts';
       }
 
       await roomRef.child('ready').remove();
