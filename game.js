@@ -230,10 +230,11 @@ function backToUsername() {
   pendingUsername = '';
 }
 
-async function showLobbyMain(name) {
+async async function showLobbyMain(name) {
   ['lobby-username','lobby-set-password','lobby-login-password'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
   document.getElementById('lobby-main').classList.remove('hidden');
+  ['cpu-picker','private-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
 
   // Load rating and display alongside username
   const profile = await loadProfile(myPlayerId);
@@ -472,17 +473,49 @@ let cpuDifficulty = null;
 let cpuPlayer     = null;
 let cpuThinking   = false;
 
+let pendingCpuSide = 'X'; // default player side
+
 function openCpuPicker() {
-  document.getElementById('cpu-difficulty').classList.toggle('hidden');
+  document.getElementById('cpu-picker').classList.remove('hidden');
+  document.getElementById('private-picker').classList.add('hidden');
+  // Default select X
+  pendingCpuSide = 'X';
+  document.querySelector('.cpu-side-btn.x-side').classList.add('selected');
+  document.querySelector('.cpu-side-btn.o-side').classList.remove('selected');
 }
 
-function startVsCPU(difficulty) {
+function closeCpuPicker() {
+  document.getElementById('cpu-picker').classList.add('hidden');
+}
+
+function setCpuSide(side) {
+  pendingCpuSide = side;
+  document.querySelector('.cpu-side-btn.x-side').classList.toggle('selected', side === 'X');
+  document.querySelector('.cpu-side-btn.o-side').classList.toggle('selected', side === 'O');
+}
+
+function confirmCpuStart(difficulty) {
+  closeCpuPicker();
+  startVsCPU(difficulty, pendingCpuSide);
+}
+
+function openPrivatePicker() {
+  document.getElementById('private-picker').classList.remove('hidden');
+  document.getElementById('cpu-picker').classList.add('hidden');
+  document.getElementById('join-input').focus();
+}
+
+function closePrivatePicker() {
+  document.getElementById('private-picker').classList.add('hidden');
+}
+
+function startVsCPU(difficulty, playerSide) {
   cpuDifficulty = difficulty;
-  myPlayer  = 'X';
-  cpuPlayer = 'O';
+  myPlayer  = playerSide || 'X';
+  cpuPlayer = myPlayer === 'X' ? 'O' : 'X';
   gameMode  = 'local';
   isRanked  = false;
-  names     = { X: myUsername || 'You', O: 'CPU (' + difficulty + ')' };
+  names     = { [myPlayer]: myUsername || 'You', [cpuPlayer]: 'CPU (' + difficulty + ')' };
   resetGameState();
   document.getElementById('cpu-difficulty').classList.add('hidden');
   document.getElementById('lobby-screen').classList.add('hidden');
@@ -881,8 +914,9 @@ async function leaveRoom() {
   document.getElementById('room-info-bar').classList.remove('hidden');
   document.getElementById('lobby-screen').classList.remove('hidden');
   showLobbyPanel('lobby-main');
-  document.getElementById('join-input').value = '';
+  const jiEl = document.getElementById('join-input'); if (jiEl) jiEl.value = '';
   setLobbyError('');
+  ['cpu-picker','private-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
 }
 
 function detachListeners() {

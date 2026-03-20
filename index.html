@@ -60,7 +60,7 @@
 
   <!-- ── Lobby Screen ───────────────────────────────────────────────── -->
   <div id="lobby-screen">
-    <button class="htp-trigger" onclick="openHTP()">how to play ?</button>
+    <button class="htp-trigger" onclick="openHTP()">? How to Play</button>
     <div class="lobby-box">
       <div class="game-title">
         <span class="title-main">Tic · Tac · Toe</span>
@@ -112,39 +112,58 @@
       <div id="lobby-main" class="hidden">
         <div class="username-display" id="username-display" onclick="changeUsername()"></div>
 
-        <div class="mode-group">
-          <div class="mode-label">Play Online</div>
-          <button class="lobby-btn quickmatch" onclick="quickMatch()">⚡ &nbsp;Quick Match</button>
-          <p class="lobby-hint-small">Get matched with a random opponent instantly</p>
-          <div class="lobby-or">or</div>
-          <button class="lobby-btn primary" onclick="createRoom()">Create Private Room</button>
-          <div class="lobby-or">or</div>
-          <div class="join-row">
+        <!-- 2×2 grid of mode buttons -->
+        <div class="mode-grid">
+          <button class="mode-tile tile-quick" onclick="quickMatch()">
+            <span class="tile-icon">⚡</span>
+            <span class="tile-label">Quick Match</span>
+            <span class="tile-sub">Rated</span>
+          </button>
+          <button class="mode-tile tile-private" onclick="openPrivatePicker()">
+            <span class="tile-icon">🔒</span>
+            <span class="tile-label">Private Room</span>
+            <span class="tile-sub">Create or join</span>
+          </button>
+          <button class="mode-tile tile-cpu" onclick="openCpuPicker()">
+            <span class="tile-icon">🤖</span>
+            <span class="tile-label">vs CPU</span>
+            <span class="tile-sub">Pick difficulty</span>
+          </button>
+          <button class="mode-tile tile-pnp" onclick="startPassAndPlay()">
+            <span class="tile-icon">🤝</span>
+            <span class="tile-label">Pass &amp; Play</span>
+            <span class="tile-sub">Local 2P</span>
+          </button>
+        </div>
+
+        <!-- CPU picker (shown when vs CPU tile clicked) -->
+        <div id="cpu-picker" class="cpu-picker hidden">
+          <div class="cpu-picker-label">Pick your side</div>
+          <div class="cpu-side-row">
+            <button class="cpu-side-btn x-side" onclick="setCpuSide('X')">X</button>
+            <span class="cpu-side-vs">vs</span>
+            <button class="cpu-side-btn o-side" onclick="setCpuSide('O')">O</button>
+          </div>
+          <div class="cpu-picker-label" style="margin-top:10px">Difficulty</div>
+          <div class="cpu-diff-row">
+            <button class="diff-btn" onclick="confirmCpuStart('easy')">Easy</button>
+            <button class="diff-btn" onclick="confirmCpuStart('medium')">Medium</button>
+            <button class="diff-btn" onclick="confirmCpuStart('hard')">Hard</button>
+          </div>
+          <button class="lobby-btn small" style="margin-top:8px;width:100%" onclick="closeCpuPicker()">Cancel</button>
+        </div>
+
+        <!-- Private room join row (shown when Private Room tile clicked) -->
+        <div id="private-picker" class="private-picker hidden">
+          <button class="lobby-btn primary" style="width:100%;margin-bottom:8px" onclick="createRoom()">+ Create Room</button>
+          <div class="join-row" style="width:100%">
             <input id="join-input" type="text" placeholder="ENTER CODE" maxlength="6" />
             <button class="lobby-btn" onclick="joinRoom()">Join</button>
           </div>
+          <button class="lobby-btn small" style="margin-top:6px;width:100%" onclick="closePrivatePicker()">Cancel</button>
         </div>
 
-        <div class="mode-divider"></div>
-
-        <div class="mode-group">
-          <div class="mode-label">Play Locally</div>
-          <button class="lobby-btn cpu" onclick="openCpuPicker()">🤖 &nbsp;vs CPU</button>
-          <p class="lobby-hint-small" id="cpu-hint">Choose your difficulty</p>
-          <!-- Difficulty picker (hidden until CPU clicked) -->
-          <div id="cpu-difficulty" class="cpu-difficulty hidden">
-            <button class="diff-btn" onclick="startVsCPU('easy')">Easy</button>
-            <button class="diff-btn" onclick="startVsCPU('medium')">Medium</button>
-            <button class="diff-btn" onclick="startVsCPU('hard')">Hard</button>
-          </div>
-          <div class="lobby-or" style="margin:10px 0">or</div>
-          <button class="lobby-btn local" onclick="startPassAndPlay()">🤝 &nbsp;Pass &amp; Play</button>
-          <p class="lobby-hint-small">Two players on the same device</p>
-        </div>
-
-        <div class="mode-divider"></div>
-
-        <button class="lobby-btn leaderboard-btn" onclick="openLB()">🏆 &nbsp;Leaderboard</button>
+        <button class="lobby-btn leaderboard-btn" style="margin-top:10px" onclick="openLB()">🏆 &nbsp;Leaderboard</button>
 
         <p id="lobby-error" class="lobby-error"></p>
       </div>
@@ -171,7 +190,7 @@
 
   <!-- ── Game Screen ────────────────────────────────────────────────── -->
   <div id="game-screen" class="hidden">
-    <button class="htp-trigger in-game" onclick="openHTP()">how to play ?</button>
+    <button class="htp-trigger in-game" onclick="openHTP()">? How to Play</button>
 
     <!-- Desktop: three-column layout. Mobile: stacked. -->
     <div class="game-layout">
@@ -233,7 +252,7 @@ Your move sends opponent to that board</p>
         <div class="controls-vertical">
           <button id="ingame-newgame-btn" onclick="restartGame()">↺ New Game</button>
           <button onclick="leaveRoom()">⌂ Home</button>
-          <button class="htp-mobile-btn" onclick="openHTP()">how to play ?</button>
+          <button class="htp-mobile-btn" onclick="openHTP()">? How to Play</button>
         </div>
       </div>
 
