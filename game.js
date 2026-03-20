@@ -1200,46 +1200,57 @@ async function startOnlineGame() {
     const ready    = snap.exists() ? snap.val() : {};
     const opponent = myPlayer === 'X' ? 'O' : 'X';
 
-    // Both players ready — reset the game with randomised seat swap
+    // Both players ready — reset with randomised seats
     if (ready.X === true && ready.O === true) {
       oppWasReady = false;
       ratingShown = false;
 
-      // Read the room to get current seat assignments
+      // Read current room data
       const roomSnap = await roomRef.get();
       if (!roomSnap.exists()) return;
       const rd = roomSnap.val();
+      const currentCreator = rd.creatorPlayer || 'X';
 
-      // Determine if seats should swap — use the stored swapSeats flag if present,
-      // otherwise this client writes the decision (atomic transaction prevents double-write)
-      let swapDecided = false;
-      let doSwap = false;
-      await roomRef.child('swapSeats').transaction(cur => {
-        if (cur !== null) { doSwap = cur === true; return cur; } // already decided
-        swapDecided = true;
-        doSwap = Math.random() < 0.5;
-        return doSwap; // write the decision for the other client to read
+      // One player writes the new seat assignment (host = creatorPlayer's side)
+      // We use a transaction so only one client does the write
+      let newCreatorPlayer = currentCreator; // default: no swap
+      let iDecided = false;
+
+      await roomRef.child('nextCreator').transaction(cur => {
+        if (cur !== null) {
+          // Already written by the other player — just read it
+          newCreatorPlayer = cur;
+          return cur;
+        }
+        // We write it — randomly decide
+        iDecided = true;
+        newCreatorPlayer = Math.random() < 0.5 ? 'X' : 'O';
+        return newCreatorPlayer;
       });
 
-      if (doSwap) {
-        const currentCreator = rd.creatorPlayer || 'X';
-        const newCreator = currentCreator === 'X' ? 'O' : 'X';
-        if (swapDecided) {
-          // We decided — write to Firebase
-          await roomRef.child('creatorPlayer').set(newCreator);
-        }
-        // Both clients update their own myPlayer
-        myPlayer = myPlayer === 'X' ? 'O' : 'X';
+      // Update Firebase seat if we decided (the other client already got it via transaction read)
+      if (iDecided) {
+        await roomRef.child('creatorPlayer').set(newCreatorPlayer);
+      }
+
+      // Both clients derive their own seat from the new creatorPlayer
+      // hostId = the original room creator (stored in room)
+      const amIHost = rd.hostId === myPlayerId || (!rd.hostId && rd.creatorPlayer === currentCreator);
+      const myNewSeat = amIHost ? newCreatorPlayer : (newCreatorPlayer === 'X' ? 'O' : 'X');
+
+      // Only update if seat actually changed
+      if (myNewSeat !== myPlayer) {
+        myPlayer = myNewSeat;
         const labelEl = document.getElementById('my-player-label');
         if (labelEl) labelEl.textContent = 'You are: ' + myPlayer;
-        // Swap cached ratings
+        // Swap cached ratings too
         const tmp    = myGameRating;
         myGameRating  = oppGameRating;
         oppGameRating = tmp;
       }
 
       await roomRef.child('ready').remove();
-      await roomRef.child('swapSeats').remove();
+      await roomRef.child('nextCreator').remove();
       await roomRef.child('forfeit').remove();
       await roomRef.child('ratingSettled').remove();
       await roomRef.child('game').set(serializeGame(initialGameState()));
