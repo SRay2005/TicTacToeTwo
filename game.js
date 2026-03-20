@@ -984,8 +984,9 @@ async function startOnlineGame() {
 
   document.getElementById('pc-name-x').textContent = names.X;
   document.getElementById('pc-name-o').textContent = names.O;
-  document.getElementById('score-x').textContent = '0';
-  document.getElementById('score-o').textContent = '0';
+  // Keep in-session scores (don't reset to 0 — scoresListener only fires on change)
+  document.getElementById('score-x').textContent = scores.X || 0;
+  document.getElementById('score-o').textContent = scores.O || 0;
   if (rdata.ranked) {
     document.getElementById('pc-rating-' + hostSeat.toLowerCase()).textContent  = (rdata.hostRating  || STARTING_RATING) + ' pts';
     document.getElementById('pc-rating-' + guestSeat.toLowerCase()).textContent = (rdata.guestRating || STARTING_RATING) + ' pts';
@@ -1104,12 +1105,14 @@ async function startOnlineGame() {
   });
 
   // Listen for ready / rematch state changes
+  let oppWasReady = false; // track whether opponent ever set their ready flag
   readyListener = roomRef.child('ready').on('value', async snap => {
-    const ready = snap.exists() ? snap.val() : {};
+    const ready    = snap.exists() ? snap.val() : {};
     const opponent = myPlayer === 'X' ? 'O' : 'X';
 
     // Both players ready — reset the game
     if (ready.X === true && ready.O === true) {
+      oppWasReady = false;
       await roomRef.child('ready').remove();
       await roomRef.child('forfeit').remove();
       await roomRef.child('ratingSettled').remove();
@@ -1117,20 +1120,29 @@ async function startOnlineGame() {
       return;
     }
 
-    // Opponent pressed New Game — show notification on our end-overlay
-    if (ready[opponent] === true && !ready[myPlayer]) {
+    // Opponent pressed New Game — show pulsing notification
+    if (ready[opponent] === true) {
+      oppWasReady = true;
       const notif = document.getElementById('rematch-notif');
       if (notif) notif.classList.remove('hidden');
     }
 
-    // Opponent's ready flag cleared (they went home) — notify us they declined
-    if (!ready[opponent] && ready[myPlayer] === true) {
+    // Opponent's ready flag was cleared AFTER being set = they went home
+    if (oppWasReady && !ready[opponent] && ready[myPlayer] === true) {
+      oppWasReady = false;
       const btn = document.getElementById('end-newgame-btn');
       if (btn) {
         btn.textContent = '✕ Opponent went home';
         btn.disabled    = true;
         btn.style.color = 'var(--muted)';
       }
+      const notif = document.getElementById('rematch-notif');
+      if (notif) notif.classList.add('hidden');
+    }
+
+    // If no ready flags at all, reset the notification (fresh state)
+    if (!ready[opponent] && !ready[myPlayer]) {
+      oppWasReady = false;
       const notif = document.getElementById('rematch-notif');
       if (notif) notif.classList.add('hidden');
     }
