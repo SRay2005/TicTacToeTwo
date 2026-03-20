@@ -1016,6 +1016,8 @@ async function leaveRoom() {
   setIngameNewGameVisible(true);
   isRanked      = false;
   ratingShown   = false;
+  const deltaEl = document.getElementById('end-rating-delta');
+  if (deltaEl) deltaEl.classList.add('hidden');
   cpuDifficulty = null; cpuPlayer = null; cpuThinking = false;
   document.body.style.setProperty('--bg-tint', 'transparent');
   // Remove our ready flag so opponent's button resets
@@ -1431,6 +1433,9 @@ function hideEndOverlay() {
   btn.style.color = ''; btn.textContent = '↺  New Game';
   const notif = document.getElementById('rematch-notif');
   if (notif) notif.classList.add('hidden');
+  // Always clear the rating delta so it never persists into unranked games
+  const deltaEl = document.getElementById('end-rating-delta');
+  if (deltaEl) deltaEl.classList.add('hidden');
 }
 
 function setIngameNewGameVisible(visible) {
