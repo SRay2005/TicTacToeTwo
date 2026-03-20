@@ -1238,15 +1238,26 @@ async function startOnlineGame() {
       const amIHost = rd.hostId === myPlayerId || (!rd.hostId && rd.creatorPlayer === currentCreator);
       const myNewSeat = amIHost ? newCreatorPlayer : (newCreatorPlayer === 'X' ? 'O' : 'X');
 
-      // Only update if seat actually changed
-      if (myNewSeat !== myPlayer) {
-        myPlayer = myNewSeat;
-        const labelEl = document.getElementById('my-player-label');
-        if (labelEl) labelEl.textContent = 'You are: ' + myPlayer;
-        // Swap cached ratings too
-        const tmp    = myGameRating;
-        myGameRating  = oppGameRating;
-        oppGameRating = tmp;
+      // Update seat and names if anything changed
+      myPlayer = myNewSeat;
+      const labelEl = document.getElementById('my-player-label');
+      if (labelEl) labelEl.textContent = 'You are: ' + myPlayer;
+
+      // Swap names dict and cards to match new seats
+      const myName  = myUsername || 'You';
+      const oppName = Object.values(names).find(n => n !== myName) || 'Opponent';
+      names[myPlayer]                                     = myName;
+      names[myPlayer === 'X' ? 'O' : 'X']                = oppName;
+      document.getElementById('pc-name-x').textContent   = names.X;
+      document.getElementById('pc-name-o').textContent   = names.O;
+
+      // Swap cached ratings to match new seats
+      const tmp    = myGameRating;
+      myGameRating  = oppGameRating;
+      oppGameRating = tmp;
+      if (isRanked) {
+        document.getElementById('pc-rating-' + myPlayer.toLowerCase()).textContent          = myGameRating  + ' pts';
+        document.getElementById('pc-rating-' + (myPlayer==='X'?'o':'x')).textContent       = oppGameRating + ' pts';
       }
 
       await roomRef.child('ready').remove();
