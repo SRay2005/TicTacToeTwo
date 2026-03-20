@@ -1200,10 +1200,31 @@ async function startOnlineGame() {
     const ready    = snap.exists() ? snap.val() : {};
     const opponent = myPlayer === 'X' ? 'O' : 'X';
 
-    // Both players ready — reset the game
+    // Both players ready — reset the game with randomised seat swap
     if (ready.X === true && ready.O === true) {
       oppWasReady = false;
-      ratingShown = false; // oppGameRating updated by showInstantDelta for rematch
+      ratingShown = false;
+
+      // Randomly decide whether to swap seats
+      const swap = Math.random() < 0.5;
+      if (swap) {
+        // Flip creatorPlayer so both clients know who is now X/O
+        const roomSnap = await roomRef.get();
+        const currentCreator = roomSnap.val().creatorPlayer || 'X';
+        const newCreator = currentCreator === 'X' ? 'O' : 'X';
+        await roomRef.child('creatorPlayer').set(newCreator);
+        await roomRef.child('players').set({ [newCreator]: true, [currentCreator]: true });
+        // Flip our own myPlayer
+        myPlayer = myPlayer === 'X' ? 'O' : 'X';
+        // Update player label
+        const labelEl = document.getElementById('my-player-label');
+        if (labelEl) labelEl.textContent = 'You are: ' + myPlayer;
+        // Refresh cached ratings for new seat
+        const tmpRating  = myGameRating;
+        myGameRating     = oppGameRating;
+        oppGameRating    = tmpRating;
+      }
+
       await roomRef.child('ready').remove();
       await roomRef.child('forfeit').remove();
       await roomRef.child('ratingSettled').remove();
