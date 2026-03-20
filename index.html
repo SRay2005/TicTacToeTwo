@@ -60,7 +60,7 @@
 
   <!-- ── Lobby Screen ───────────────────────────────────────────────── -->
   <div id="lobby-screen">
-    <button class="htp-trigger" onclick="openHTP()">How to Play ?</button>
+    <button class="htp-trigger" onclick="openHTP()">how to play ?</button>
     <div class="lobby-box">
       <div class="game-title">
         <span class="title-main">Tic · Tac · Toe</span>
@@ -129,6 +129,15 @@
 
         <div class="mode-group">
           <div class="mode-label">Play Locally</div>
+          <button class="lobby-btn cpu" onclick="openCpuPicker()">🤖 &nbsp;vs CPU</button>
+          <p class="lobby-hint-small" id="cpu-hint">Choose your difficulty</p>
+          <!-- Difficulty picker (hidden until CPU clicked) -->
+          <div id="cpu-difficulty" class="cpu-difficulty hidden">
+            <button class="diff-btn" onclick="startVsCPU('easy')">Easy</button>
+            <button class="diff-btn" onclick="startVsCPU('medium')">Medium</button>
+            <button class="diff-btn" onclick="startVsCPU('hard')">Hard</button>
+          </div>
+          <div class="lobby-or" style="margin:10px 0">or</div>
           <button class="lobby-btn local" onclick="startPassAndPlay()">🤝 &nbsp;Pass &amp; Play</button>
           <p class="lobby-hint-small">Two players on the same device</p>
         </div>
@@ -162,7 +171,7 @@
 
   <!-- ── Game Screen ────────────────────────────────────────────────── -->
   <div id="game-screen" class="hidden">
-    <button class="htp-trigger in-game" onclick="openHTP()">How to Play ?</button>
+    <button class="htp-trigger in-game" onclick="openHTP()">how to play ?</button>
 
     <!-- Desktop: three-column layout. Mobile: stacked. -->
     <div class="game-layout">
@@ -224,7 +233,7 @@ Your move sends opponent to that board</p>
         <div class="controls-vertical">
           <button id="ingame-newgame-btn" onclick="restartGame()">↺ New Game</button>
           <button onclick="leaveRoom()">⌂ Home</button>
-          <button class="htp-mobile-btn" onclick="openHTP()">How to Play ?</button>
+          <button class="htp-mobile-btn" onclick="openHTP()">how to play ?</button>
         </div>
       </div>
 

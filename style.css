@@ -231,6 +231,31 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 }
 .lobby-btn.primary:hover { background: rgba(255,224,102,0.07); }
 
+.lobby-btn.cpu {
+  width: 100%; padding: 14px; font-size: 0.8rem;
+  border-color: #a78bfa; color: #a78bfa; background: rgba(167,139,250,0.05);
+}
+.lobby-btn.cpu:hover { background: rgba(167,139,250,0.12); box-shadow: 0 0 20px rgba(167,139,250,0.12); }
+
+.cpu-difficulty {
+  display: flex; gap: 8px; width: 100%; margin-top: 10px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.diff-btn {
+  flex: 1; font-family: 'Space Mono', monospace;
+  font-size: 0.62rem; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 8px 4px; border-radius: 3px; cursor: pointer;
+  transition: all 0.15s;
+}
+.diff-btn:nth-child(1) { border: 1px solid #4dff91; color: #4dff91; background: rgba(77,255,145,0.05); }
+.diff-btn:nth-child(1):hover { background: rgba(77,255,145,0.12); }
+.diff-btn:nth-child(2) { border: 1px solid var(--active-glow); color: var(--active-glow); background: rgba(255,224,102,0.05); }
+.diff-btn:nth-child(2):hover { background: rgba(255,224,102,0.12); }
+.diff-btn:nth-child(3) { border: 1px solid var(--x-color); color: var(--x-color); background: rgba(255,77,77,0.05); }
+.diff-btn:nth-child(3):hover { background: rgba(255,77,77,0.12); }
+
 .lobby-btn.local {
   width: 100%; padding: 14px; font-size: 0.8rem;
   border-color: var(--o-color); color: var(--o-color); background: rgba(77,170,255,0.05);

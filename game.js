@@ -467,6 +467,137 @@ function startPassAndPlay() {
   render();
 }
 
+// ─── CPU / AI ─────────────────────────────────────────────────────────────────
+let cpuDifficulty = null;
+let cpuPlayer     = null;
+let cpuThinking   = false;
+
+function openCpuPicker() {
+  document.getElementById('cpu-difficulty').classList.toggle('hidden');
+}
+
+function startVsCPU(difficulty) {
+  cpuDifficulty = difficulty;
+  myPlayer  = 'X';
+  cpuPlayer = 'O';
+  gameMode  = 'local';
+  isRanked  = false;
+  names     = { X: myUsername || 'You', O: 'CPU (' + difficulty + ')' };
+  resetGameState();
+  document.getElementById('cpu-difficulty').classList.add('hidden');
+  document.getElementById('lobby-screen').classList.add('hidden');
+  document.getElementById('game-screen').classList.remove('hidden');
+  document.getElementById('game-subtitle-left').textContent = 'vs CPU';
+  document.getElementById('room-info-bar').classList.add('hidden');
+  document.getElementById('pc-name-x').textContent = names.X;
+  document.getElementById('pc-name-o').textContent = names.O;
+  document.getElementById('pc-rating-x').textContent = '';
+  document.getElementById('pc-rating-o').textContent = difficulty.toUpperCase();
+  document.getElementById('score-x').textContent = '0';
+  document.getElementById('score-o').textContent = '0';
+  buildGrid();
+  render();
+}
+
+function scheduleCpuMove() {
+  if (!cpuDifficulty || currentPlayer !== cpuPlayer || outerWinner || cpuThinking) return;
+  cpuThinking = true;
+  const delay = cpuDifficulty === 'easy' ? 400 : cpuDifficulty === 'medium' ? 650 : 950;
+  setTimeout(() => {
+    const move = getCpuMove();
+    if (move) {
+      applyMove(move.b, move.c);
+      render();
+      if (outerWinner) {
+        scores[outerWinner]++;
+        document.getElementById('score-x').textContent = scores.X;
+        document.getElementById('score-o').textContent = scores.O;
+      }
+    }
+    cpuThinking = false;
+  }, delay);
+}
+
+function getCpuMove() {
+  const validBoards = getValidBoards();
+  const allMoves = [];
+  for (const b of validBoards)
+    for (let c = 0; c < 9; c++)
+      if (boards[b][c] === null) allMoves.push({ b, c });
+  if (!allMoves.length) return null;
+  if (cpuDifficulty === 'easy')   return Math.random() < 0.8 ? randomMove(allMoves) : bestHeuristicMove(allMoves);
+  if (cpuDifficulty === 'medium') {
+    const forced = forcedMove(allMoves);
+    if (forced) return forced;
+    return Math.random() < 0.5 ? bestHeuristicMove(allMoves) : randomMove(allMoves);
+  }
+  return bestHeuristicMove(allMoves);
+}
+
+function getValidBoards() {
+  if (activeBoard !== -1 && boardWinner[activeBoard] === null) return [activeBoard];
+  return [0,1,2,3,4,5,6,7,8].filter(b => boardWinner[b] === null);
+}
+function randomMove(moves) { return moves[Math.floor(Math.random() * moves.length)]; }
+
+function forcedMove(moves) {
+  const opp = cpuPlayer === 'X' ? 'O' : 'X';
+  for (const { b, c } of moves) if (wouldWinBoard(b, c, cpuPlayer)) return { b, c };
+  for (const { b, c } of moves) if (wouldWinBoard(b, c, opp))       return { b, c };
+  return null;
+}
+function wouldWinBoard(b, c, player) {
+  const sim = [...boards[b]]; sim[c] = player;
+  return checkWinner(sim) === player;
+}
+
+function bestHeuristicMove(moves) {
+  let best = -Infinity, bestMove = moves[0];
+  for (const m of moves) { const s = scoreMove(m.b, m.c); if (s > best) { best = s; bestMove = m; } }
+  return bestMove;
+}
+
+function scoreMove(b, c) {
+  let score = 0;
+  const opp = cpuPlayer === 'X' ? 'O' : 'X';
+  if (wouldWinBoard(b, c, cpuPlayer)) score += 100;
+  if (wouldWinBoard(b, c, opp))       score += 80;
+  score += outerBoardStrategicValue(b) * 3;
+  score += cellPositionValue(c);
+  const nb = c;
+  if (boardWinner[nb] !== null) {
+    score -= 5;
+  } else {
+    for (let nc = 0; nc < 9; nc++) {
+      if (boards[nb][nc] === null) {
+        const sim = [...boards[nb]]; sim[nc] = opp;
+        if (checkWinner(sim) === opp) { score -= 40; break; }
+      }
+    }
+    score += boardStrengthFor(nb, cpuPlayer) * 4;
+    score -= boardStrengthFor(nb, opp) * 3;
+  }
+  score += outerProgressValue(b, cpuPlayer) * 5;
+  return score;
+}
+
+function cellPositionValue(c) {
+  if (c === 4) return 8;
+  if (c === 0 || c === 2 || c === 6 || c === 8) return 5;
+  return 3;
+}
+function outerBoardStrategicValue(b) { return WINS.filter(combo => combo.includes(b)).length; }
+function boardStrengthFor(b, player) { return boards[b].filter(v => v === player).length; }
+function outerProgressValue(b, player) {
+  let value = 0;
+  const won = boardWinner.map((w,i) => w === player ? i : -1).filter(i => i >= 0);
+  for (const combo of WINS) {
+    if (!combo.includes(b)) continue;
+    value += combo.filter(i => won.includes(i)).length;
+  }
+  return value;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function generateRoomId() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -730,6 +861,7 @@ async function leaveRoom() {
   hideEndOverlay();
   clearInactivityTimer();
   setIngameNewGameVisible(true);
+  cpuDifficulty = null; cpuPlayer = null; cpuThinking = false;
   document.body.style.setProperty('--bg-tint', 'transparent');
   // Remove our ready flag so opponent's button resets
   if (roomRef && myPlayer) {
@@ -1071,8 +1203,14 @@ function renderStatus() {
   if (outerWinner) {
     const col = outerWinner === 'X' ? 'var(--x-color)' : 'var(--o-color)';
     if (gameMode === 'local') {
-      el.innerHTML = `<span class="win-banner" style="color:${col}">${outerWinner} WINS!</span>`;
-      showEndOverlay('win', `${outerWinner} wins this round!`);
+      if (cpuDifficulty) {
+        const playerWon = outerWinner === myPlayer;
+        el.innerHTML = `<span class="win-banner" style="color:${col}">${playerWon ? 'YOU WIN!' : 'CPU WINS!'}</span>`;
+        showEndOverlay(playerWon ? 'win' : 'loss', playerWon ? 'Great play!' : 'The CPU got you.');
+      } else {
+        el.innerHTML = `<span class="win-banner" style="color:${col}">${outerWinner} WINS!</span>`;
+        showEndOverlay('win', `${outerWinner} wins this round!`);
+      }
     } else {
       const youWon = outerWinner === myPlayer;
       el.innerHTML = `<span class="win-banner" style="color:${col}">${youWon ? 'YOU WIN!' : 'OPPONENT WINS!'}</span>`;
@@ -1084,6 +1222,10 @@ function renderStatus() {
   }
 
   if (gameMode === 'local') {
+    if (cpuDifficulty && currentPlayer === cpuPlayer) {
+      el.innerHTML = `<span class="player-indicator"><span class="player-symbol ${currentPlayer.toLowerCase()}">${currentPlayer}</span><span style="color:var(--muted)">— 🤖 CPU is thinking...</span></span>`;
+      return;
+    }
     // Flash the bar on turn change to signal the hand-off
     bar.classList.remove('pnp-flash');
     void bar.offsetWidth; // reflow to restart animation
@@ -1092,7 +1234,7 @@ function renderStatus() {
     el.innerHTML = `
       <span class="player-indicator">
         <span class="player-symbol ${currentPlayer.toLowerCase()}">${currentPlayer}</span>
-        <span>— <span style="color:var(--active-glow)">${currentPlayer}'s turn</span> — play in
+        <span>— <span style="color:var(--active-glow)">${cpuDifficulty ? 'Your turn' : currentPlayer + "'s turn"}</span> — play in
           <span style="color:var(--active-glow)">${where}</span>
         </span>
       </span>`;
@@ -1125,6 +1267,7 @@ async function handleClick(b, c) {
 
   // Online: only let the current player click
   if (gameMode === 'online' && currentPlayer !== myPlayer) return;
+  if (cpuDifficulty && (currentPlayer === cpuPlayer || cpuThinking)) return;
 
   applyMove(b, c);
 
@@ -1146,6 +1289,8 @@ async function handleClick(b, c) {
       scores[outerWinner]++;
       document.getElementById('score-x').textContent = scores.X;
       document.getElementById('score-o').textContent = scores.O;
+    } else if (cpuDifficulty) {
+      scheduleCpuMove();
     }
   }
 }
@@ -1189,6 +1334,7 @@ async function restartGame() {
     hideEndOverlay();
     clearInactivityTimer();
     resetGameState();
+    cpuThinking = false;
     buildGrid();
     render();
     return;
