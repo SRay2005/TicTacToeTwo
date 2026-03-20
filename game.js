@@ -454,6 +454,7 @@ let boards      = Array.from({ length: 9 }, () => Array(9).fill(null));
 let boardWinner = Array(9).fill(null);
 let outerWinner = null;
 let activeBoard = -1;
+let ratingShown = false;
 let scores      = { X: 0, O: 0 };
 let moveCount   = 0;
 
@@ -674,6 +675,7 @@ function resetGameState() {
   outerWinner   = null;
   activeBoard   = -1;
   moveCount     = 0;
+  ratingShown   = false;
 }
 
 function initialGameState() {
@@ -1018,10 +1020,12 @@ async function startOnlineGame() {
     const gameData = snap.val();
     deserializeGame(gameData);
 
-    // Reset New Game button in case it was in waiting state
-    const btn = document.getElementById('end-newgame-btn');
-    if (btn) { btn.textContent = '↺  New Game'; btn.disabled = false; }
-    hideEndOverlay();
+    // Only reset overlay/button when a fresh game starts (not on game-over syncs)
+    if (!outerWinner) {
+      const btn = document.getElementById('end-newgame-btn');
+      if (btn) { btn.textContent = '↺  New Game'; btn.disabled = false; btn.style.color = ''; }
+      hideEndOverlay();
+    }
 
     // Clear win line and refresh ratings when a fresh game starts
     if (!outerWinner) {
@@ -1075,7 +1079,7 @@ async function startOnlineGame() {
           outerWinner = myPlayer;
           setIngameNewGameVisible(true);
           showEndOverlay('oppleft');
-          if (isRanked) roomRef.get().then(s => settleRating(s.val(), myPlayer).then(d => showRatingDelta(d)));
+          if (isRanked && !ratingShown) { ratingShown = true; roomRef.get().then(s => settleRating(s.val(), myPlayer).then(d => showRatingDelta(d))); }
         }
       }, 8000);
     } else if (players[opponent] === true && oppLeftTimer) {
@@ -1100,7 +1104,7 @@ async function startOnlineGame() {
         showEndOverlay('loss', 'You ran out of time.');
       }
       // Settle rating — treat forfeit as a normal win/loss
-      if (isRanked) roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d)));
+      if (isRanked && !ratingShown) { ratingShown = true; roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d))); }
     }
   });
 
@@ -1262,6 +1266,7 @@ function showEndOverlay(result, subtitle = '') {
     newBtn.style.display = 'none';
   } else {
     newBtn.style.display = '';
+    newBtn.textContent = (gameMode === 'online') ? '↺  Rematch' : '↺  New Game';
   }
 
   if (result === 'win') {
@@ -1312,7 +1317,7 @@ function renderStatus() {
     el.innerHTML = `<span class="win-banner" style="color:#888">DRAW</span>`;
     setIngameNewGameVisible(true);
     showEndOverlay('draw');
-    if (gameMode === 'online' && isRanked) roomRef.get().then(s => settleRating(s.val(),'D').then(d => showRatingDelta(d)));
+    if (gameMode === 'online' && isRanked && !ratingShown) { ratingShown = true; roomRef.get().then(s => settleRating(s.val(),'D').then(d => showRatingDelta(d))); }
     return;
   }
 
@@ -1332,7 +1337,7 @@ function renderStatus() {
       el.innerHTML = `<span class="win-banner" style="color:${col}">${youWon ? 'YOU WIN!' : 'OPPONENT WINS!'}</span>`;
       setIngameNewGameVisible(true);
       showEndOverlay(youWon ? 'win' : 'loss');
-      if (isRanked) roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d)));
+      if (isRanked && !ratingShown) { ratingShown = true; roomRef.get().then(s => settleRating(s.val(), outerWinner).then(d => showRatingDelta(d))); }
     }
     return;
   }
