@@ -1224,13 +1224,10 @@ async function startOnlineGame() {
       document.getElementById('pc-name-x').textContent = names.X;
       document.getElementById('pc-name-o').textContent = names.O;
 
-      // Swap cached ratings
-      const tmpRating = myGameRating;
-      myGameRating    = oppGameRating;
-      oppGameRating   = tmpRating;
+      // Don't swap cached ratings — myGameRating always = my actual rating regardless of seat
       if (isRanked) {
-        document.getElementById('pc-rating-x').textContent = (names.X === (myUsername||'You') ? myGameRating : oppGameRating) + ' pts';
-        document.getElementById('pc-rating-o').textContent = (names.O === (myUsername||'You') ? myGameRating : oppGameRating) + ' pts';
+        document.getElementById('pc-rating-' + myPlayer.toLowerCase()).textContent                    = myGameRating  + ' pts';
+        document.getElementById('pc-rating-' + (myPlayer === 'X' ? 'o' : 'x')).textContent           = oppGameRating + ' pts';
       }
 
       await roomRef.child('ready').remove();
