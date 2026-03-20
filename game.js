@@ -1215,21 +1215,34 @@ async function startOnlineGame() {
       oppWasReady = false;
       ratingShown = false;
 
-      // Simply flip myPlayer — both clients do this identically and simultaneously.
-      // myName/oppName stay fixed to the actual players, not the seats.
+      // Flip seats — both clients do this identically
       myPlayer = myPlayer === 'X' ? 'O' : 'X';
 
-      // Rebuild names dict from cached myName/oppName (never changes)
+      // Rebuild names dict (myName/oppName are pinned to players, not seats)
       names[myPlayer]                      = myName;
       names[myPlayer === 'X' ? 'O' : 'X'] = oppName;
-
-      // Update cards
       document.getElementById('pc-name-x').textContent = names.X;
       document.getElementById('pc-name-o').textContent = names.O;
-      if (isRanked) {
-        document.getElementById('pc-rating-' + myPlayer.toLowerCase()).textContent          = myGameRating  + ' pts';
-        document.getElementById('pc-rating-' + (myPlayer==='X'?'o':'x')).textContent       = oppGameRating + ' pts';
+
+      // Read current room to find new creatorPlayer value, then update it.
+      // This ensures the game listener reads the correct hSeat when refreshing ratings.
+      const rsSnap = await roomRef.get();
+      const rsData = rsSnap.val() || {};
+      const curCreator = rsData.creatorPlayer || 'X';
+      const newCreator = curCreator === 'X' ? 'O' : 'X';
+
+      // Only the original host writes — guest reads. Both derive myGameRating correctly.
+      const amHost = rsData.hostId === myPlayerId;
+      if (amHost) {
+        await roomRef.child('creatorPlayer').set(newCreator);
       }
+
+      // Also update cached ratings to match new creatorPlayer
+      // hSeat = newCreator, so host's rating now belongs to newCreator card
+      const hProf = await loadProfile(rsData.hostId  || myPlayerId);
+      const gProf = await loadProfile(rsData.guestId || myPlayerId);
+      myGameRating  = amHost ? hProf.rating : gProf.rating;
+      oppGameRating = amHost ? gProf.rating : hProf.rating;
 
       await roomRef.child('ready').remove();
       await roomRef.child('forfeit').remove();
