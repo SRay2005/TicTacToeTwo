@@ -1014,6 +1014,8 @@ async function leaveRoom() {
   hideEndOverlay();
   clearInactivityTimer();
   setIngameNewGameVisible(true);
+  isRanked      = false;
+  ratingShown   = false;
   cpuDifficulty = null; cpuPlayer = null; cpuThinking = false;
   document.body.style.setProperty('--bg-tint', 'transparent');
   // Remove our ready flag so opponent's button resets
