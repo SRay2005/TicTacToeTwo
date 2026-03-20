@@ -1205,27 +1205,41 @@ async function startOnlineGame() {
       oppWasReady = false;
       ratingShown = false;
 
-      // Randomly decide whether to swap seats
-      const swap = Math.random() < 0.5;
-      if (swap) {
-        // Flip creatorPlayer so both clients know who is now X/O
-        const roomSnap = await roomRef.get();
-        const currentCreator = roomSnap.val().creatorPlayer || 'X';
+      // Read the room to get current seat assignments
+      const roomSnap = await roomRef.get();
+      if (!roomSnap.exists()) return;
+      const rd = roomSnap.val();
+
+      // Determine if seats should swap — use the stored swapSeats flag if present,
+      // otherwise this client writes the decision (atomic transaction prevents double-write)
+      let swapDecided = false;
+      let doSwap = false;
+      await roomRef.child('swapSeats').transaction(cur => {
+        if (cur !== null) { doSwap = cur === true; return cur; } // already decided
+        swapDecided = true;
+        doSwap = Math.random() < 0.5;
+        return doSwap; // write the decision for the other client to read
+      });
+
+      if (doSwap) {
+        const currentCreator = rd.creatorPlayer || 'X';
         const newCreator = currentCreator === 'X' ? 'O' : 'X';
-        await roomRef.child('creatorPlayer').set(newCreator);
-        await roomRef.child('players').set({ [newCreator]: true, [currentCreator]: true });
-        // Flip our own myPlayer
+        if (swapDecided) {
+          // We decided — write to Firebase
+          await roomRef.child('creatorPlayer').set(newCreator);
+        }
+        // Both clients update their own myPlayer
         myPlayer = myPlayer === 'X' ? 'O' : 'X';
-        // Update player label
         const labelEl = document.getElementById('my-player-label');
         if (labelEl) labelEl.textContent = 'You are: ' + myPlayer;
-        // Refresh cached ratings for new seat
-        const tmpRating  = myGameRating;
-        myGameRating     = oppGameRating;
-        oppGameRating    = tmpRating;
+        // Swap cached ratings
+        const tmp    = myGameRating;
+        myGameRating  = oppGameRating;
+        oppGameRating = tmp;
       }
 
       await roomRef.child('ready').remove();
+      await roomRef.child('swapSeats').remove();
       await roomRef.child('forfeit').remove();
       await roomRef.child('ratingSettled').remove();
       await roomRef.child('game').set(serializeGame(initialGameState()));
