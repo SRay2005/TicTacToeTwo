@@ -58,6 +58,41 @@ let myUsername = localStorage.getItem('ttt2_username') || '';
 // names[player] e.g. names['X'] = 'Alice'
 let names = { X: '—', O: '—' };
 
+// ─── Guest Mode ──────────────────────────────────────────────────────────────
+let isGuest = false;
+// Temporary in-memory stats for guests (cleared on session end)
+let guestStats = { wins: 0, losses: 0, draws: 0, rating: STARTING_RATING };
+
+function generateGuestName() {
+  const adj  = ['Swift','Bold','Quiet','Brave','Sharp','Sly','Wild','Cool'];
+  const noun = ['Fox','Bear','Wolf','Hawk','Lion','Tiger','Panda','Eagle'];
+  const num  = Math.floor(Math.random() * 900) + 100;
+  return adj[Math.floor(Math.random()*adj.length)] + noun[Math.floor(Math.random()*noun.length)] + num;
+}
+
+function playAsGuest() {
+  isGuest    = true;
+  myUsername = generateGuestName();
+  guestStats = { wins: 0, losses: 0, draws: 0, rating: STARTING_RATING };
+  // Don't write to Firebase — guest has no persistent profile
+  showLobbyMain(myUsername);
+  document.getElementById('lobby-guest-upgrade').classList.remove('hidden');
+}
+
+function upgradeGuest() {
+  // Show username entry pre-filled, then password setup
+  document.getElementById('lobby-guest-upgrade').classList.add('hidden');
+  document.getElementById('lobby-main').classList.add('hidden');
+  document.getElementById('lobby-username').classList.remove('hidden');
+  document.getElementById('username-input').value = '';
+  document.getElementById('username-input').focus();
+  document.getElementById('username-error').textContent = '';
+  // After account creation, transfer guest stats
+  pendingGuestUpgrade = true;
+}
+
+let pendingGuestUpgrade = false;
+
 // ─── Auth helpers ────────────────────────────────────────────────────────────
 const myPlayerId = localStorage.getItem('ttt2_playerId') || (() => {
   const id = 'uid_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -201,16 +236,32 @@ async function submitLogin() {
 
 // ── Finish: save locally, release old username, go to lobby ──────────────────
 async function finishLogin(name) {
-  // Release old username if different
-  if (myUsername && myUsername !== name) {
+  // Release old username if different (and it was a real username, not a guest)
+  if (myUsername && myUsername !== name && !isGuest) {
     const oldKey  = nameKey(myUsername);
     const oldSnap = await db.ref('usernames/' + oldKey).get();
     if (oldSnap.exists() && oldSnap.val().playerId === myPlayerId) {
       await db.ref('usernames/' + oldKey).remove();
     }
   }
-  myUsername = name;
+
+  // If upgrading from guest, write guest stats to the new profile
+  if (isGuest && pendingGuestUpgrade && guestStats.wins + guestStats.losses + guestStats.draws > 0) {
+    const existing = await loadProfile(myPlayerId);
+    await db.ref('players/' + myPlayerId).update({
+      rating:   guestStats.rating,
+      wins:     (existing.wins   || 0) + guestStats.wins,
+      losses:   (existing.losses || 0) + guestStats.losses,
+      draws:    (existing.draws  || 0) + guestStats.draws,
+      username: name
+    });
+  }
+
+  isGuest             = false;
+  pendingGuestUpgrade = false;
+  myUsername          = name;
   localStorage.setItem('ttt2_username', name);
+  document.getElementById('lobby-guest-upgrade').classList.add('hidden');
   showLobbyMain(name);
 }
 
@@ -237,10 +288,14 @@ async function showLobbyMain(name) {
   ['cpu-picker','private-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
 
   // Load rating and display alongside username
-  const profile = await loadProfile(myPlayerId);
-  const rating  = profile.rating || STARTING_RATING;
-  const el      = document.getElementById('username-display');
-  el.innerHTML  = name + ' <span class="lobby-rating-badge">' + rating + ' pts</span>';
+  const el = document.getElementById('username-display');
+  if (isGuest) {
+    el.innerHTML = '👤 ' + name + ' <span class="lobby-rating-badge guest-badge">GUEST</span>';
+  } else {
+    const profile = await loadProfile(myPlayerId);
+    const rating  = profile.rating || STARTING_RATING;
+    el.innerHTML  = name + ' <span class="lobby-rating-badge">' + rating + ' pts</span>';
+  }
 }
 
 function changeUsername() {
@@ -256,6 +311,7 @@ async function initLobby() {
     const key  = nameKey(myUsername);
     const snap = await db.ref('usernames/' + key).get();
     if (snap.exists() && snap.val().playerId === myPlayerId) {
+      isGuest = false;
       showLobbyMain(myUsername);
     } else {
       myUsername = '';
@@ -269,6 +325,7 @@ async function initLobby() {
 
 // ─── Player Profile & Rating ─────────────────────────────────────────────────
 async function loadProfile(playerId) {
+  if (isGuest) return { ...guestStats, username: myUsername };
   const ref  = db.ref('players/' + playerId);
   const snap = await ref.get();
   if (snap.exists()) return snap.val();
@@ -306,8 +363,6 @@ async function settleRating(roomData, winner) {
   });
 
   if (didSettle) {
-    // We won the transaction — write both profiles using individual updates
-    // (avoids needing root-level write permission in Firebase rules)
     const hostUpdates = {
       rating:   Math.max(0, hostProf.rating  + hostDelta),
       wins:     hostProf.wins   + (hostOutcome  === 1   ? 1 : 0),
@@ -322,11 +377,19 @@ async function settleRating(roomData, winner) {
       draws:    guestProf.draws  + (guestOutcome === 0.5 ? 1 : 0),
       username: roomData.usernameGuest || guestProf.username || ''
     };
-    // Write each player's profile separately — matches Firebase rules structure
-    await Promise.all([
-      db.ref('players/' + hostId).update(hostUpdates),
-      db.ref('players/' + guestId).update(guestUpdates)
-    ]);
+
+    // If I'm the host and a guest, update in-memory instead of Firebase
+    if (myPlayerId === hostId && isGuest) {
+      guestStats = { ...hostUpdates };
+    } else if (myPlayerId === guestId && isGuest) {
+      guestStats = { ...guestUpdates };
+    } else {
+      // Write to Firebase only for registered players
+      const writes = [];
+      if (!isGuest || myPlayerId !== hostId)  writes.push(db.ref('players/' + hostId).update(hostUpdates));
+      if (!isGuest || myPlayerId !== guestId) writes.push(db.ref('players/' + guestId).update(guestUpdates));
+      await Promise.all(writes);
+    }
   }
 
   // Both players return their own delta regardless of who wrote to Firebase

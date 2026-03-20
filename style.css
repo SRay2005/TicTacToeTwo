@@ -538,6 +538,13 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
   margin-left: 6px;
   vertical-align: middle;
 }
+.lobby-rating-badge.guest-badge {
+  color: #888;
+  border: 1px solid #333;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 0.5rem;
+}
 
 /* Rating delta on end overlay */
 .end-rating-delta {
@@ -551,6 +558,40 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 .end-rating-delta.none { color: var(--muted); font-size: 1rem; }
 
 /* Leaderboard button */
+.lobby-btn.guest-btn {
+  border-color: var(--border);
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.lobby-btn.guest-btn:hover { border-color: var(--text); color: var(--text); }
+
+.lobby-divider {
+  color: var(--muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+}
+
+.guest-upgrade-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255,224,102,0.06);
+  border: 1px solid rgba(255,224,102,0.25);
+  border-radius: 5px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.guest-upgrade-text {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: #aaa;
+}
+.guest-upgrade-text strong { color: var(--active-glow); font-weight: 700; }
+
 .lobby-btn.leaderboard-btn {
   width: 100%; padding: 12px; font-size: 0.76rem;
   border-color: var(--active-glow); color: var(--active-glow);
