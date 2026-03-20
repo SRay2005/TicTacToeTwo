@@ -1180,6 +1180,7 @@ async function startOnlineGame() {
     // Both players ready — reset the game
     if (ready.X === true && ready.O === true) {
       oppWasReady = false;
+      ratingShown = false; // allow rating delta to show in the new game
       await roomRef.child('ready').remove();
       await roomRef.child('forfeit').remove();
       await roomRef.child('ratingSettled').remove();
