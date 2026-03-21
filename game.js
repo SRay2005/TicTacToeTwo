@@ -1077,7 +1077,7 @@ async function leaveRoom() {
     // Calculate and show the negative delta immediately
     showInstantDelta(forfeitWinner);
     // Write forfeit so opponent gets their win screen
-    await savedRoom.child('forfeit').set({ loser: savedPlayer, ts: Date.now() });
+    await savedRoom.child('forfeit').set({ loser: savedPlayer, reason: 'quit', ts: Date.now() });
     // Show a blocking screen: "You forfeited — [delta] — OK to go home"
     await new Promise(resolve => {
       const overlay = document.getElementById('end-overlay');
@@ -1277,21 +1277,22 @@ async function startOnlineGame() {
     }
   });
 
-  // Forfeit listener — inactivity timeout
+  // Forfeit listener — inactivity timeout OR voluntary quit
   roomRef.child('forfeit').on('value', snap => {
     if (!snap.exists()) return;
-    const { loser } = snap.val();
+    const { loser, reason } = snap.val();
+    const isQuit = reason === 'quit';
     if (!outerWinner) {
       clearInactivityTimer();
       outerWinner = loser === 'X' ? 'O' : 'X';
       const youWon = myPlayer === outerWinner;
-      setIngameNewGameVisible(true);
+      // Hide rematch if opponent quit (no point rematching someone who left)
+      setIngameNewGameVisible(!isQuit);
       if (youWon) {
-        showEndOverlay('win', 'Opponent ran out of time!');
+        showEndOverlay(isQuit ? 'oppleft' : 'win', isQuit ? '' : 'Opponent ran out of time!');
       } else {
-        showEndOverlay('loss', 'You ran out of time.');
+        showEndOverlay('loss', isQuit ? 'You left the game.' : 'You ran out of time.');
       }
-      // Settle rating — treat forfeit as a normal win/loss
       if (isRanked && !ratingShown) { ratingShown = true; showInstantDelta(outerWinner); roomRef.get().then(s => settleRating(s.val(), outerWinner)); }
     }
   });
