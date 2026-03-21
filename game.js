@@ -1275,6 +1275,19 @@ async function startOnlineGame() {
       clearTimeout(oppLeftTimer);
       oppLeftTimer = null;
     }
+
+    // Post-game: opponent left the results screen (went Home after game ended)
+    if (players[opponent] === false && outerWinner) {
+      // Show notification on the end overlay
+      const btn = document.getElementById('end-newgame-btn');
+      if (btn && btn.style.display !== 'none') {
+        btn.textContent = '✕ Opponent went home';
+        btn.disabled    = true;
+        btn.style.color = 'var(--muted)';
+      }
+      const notif = document.getElementById('rematch-notif');
+      if (notif) notif.classList.add('hidden');
+    }
   });
 
   // Forfeit listener — inactivity timeout OR voluntary quit
