@@ -618,6 +618,8 @@ function startPassAndPlay() {
   document.getElementById('room-info-bar').classList.add('hidden');
   document.getElementById('pc-name-x').textContent = names.X;
   document.getElementById('pc-name-o').textContent = names.O;
+  document.getElementById('pc-rating-x').textContent = '';
+  document.getElementById('pc-rating-o').textContent = '';
   document.getElementById('score-x').textContent = '0';
   document.getElementById('score-o').textContent = '0';
 
