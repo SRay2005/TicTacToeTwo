@@ -450,12 +450,14 @@ async function showRatingDelta(delta) {
   if (delta === 0) { el.textContent = 'Rating unchanged'; el.classList.add('none'); }
   else { el.textContent = (delta > 0 ? '+' : '') + delta + ' pts'; el.classList.add(delta > 0 ? 'gain' : 'loss'); }
 
-  // Refresh lobby badge and my player card immediately
+  // Refresh lobby badge immediately using cached myGameRating (no Firebase read needed)
   refreshLobbyRating();
   if (myPlayer) {
-    const profile = await loadProfile(myPlayerId);
+    // myGameRating already updated by showInstantDelta before this is called
     const myCard  = document.getElementById('pc-rating-' + myPlayer.toLowerCase());
-    if (myCard) myCard.textContent = (profile.rating || STARTING_RATING) + ' pts';
+    const oppCard = document.getElementById('pc-rating-' + (myPlayer === 'X' ? 'o' : 'x'));
+    if (myCard)  myCard.textContent  = myGameRating  + ' pts';
+    if (oppCard) oppCard.textContent = oppGameRating + ' pts';
   }
 }
 
@@ -1181,18 +1183,11 @@ async function startOnlineGame() {
       document.getElementById('outer-win-svg').innerHTML = '';
       setIngameNewGameVisible(!isRanked);
       if (isRanked) {
-        roomRef.get().then(async snap => {
-          if (!snap.exists()) return;
-          const rd = snap.val();
-          if (!rd.hostId || !rd.guestId) return;
-          const hSeat = (rd.creatorPlayer || 'X').toLowerCase();
-          const gSeat = hSeat === 'x' ? 'o' : 'x';
-          const [hProf, gProf] = await Promise.all([loadProfile(rd.hostId), loadProfile(rd.guestId)]);
-          const hEl = document.getElementById('pc-rating-' + hSeat);
-          const gEl = document.getElementById('pc-rating-' + gSeat);
-          if (hEl) hEl.textContent = (hProf.rating || STARTING_RATING) + ' pts';
-          if (gEl) gEl.textContent = (gProf.rating || STARTING_RATING) + ' pts';
-        });
+        // Use cached myGameRating/oppGameRating — always current, no Firebase timing issues
+        const myCard  = document.getElementById('pc-rating-' + myPlayer.toLowerCase());
+        const oppCard = document.getElementById('pc-rating-' + (myPlayer === 'X' ? 'o' : 'x'));
+        if (myCard)  myCard.textContent  = myGameRating  + ' pts';
+        if (oppCard) oppCard.textContent = oppGameRating + ' pts';
       }
     }
 
