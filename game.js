@@ -351,45 +351,52 @@ async function settleRating(roomData, winner) {
   const hostSeat  = roomData.creatorPlayer || 'X';
   const guestSeat = hostSeat === 'X' ? 'O' : 'X';
 
-  // Calculate deltas locally — both players can do this independently
-  const [hostProf, guestProf] = await Promise.all([loadProfile(hostId), loadProfile(guestId)]);
+  const hostIsGuest  = roomData.hostPlayerIsGuest  === true || (myPlayerId === hostId  && isGuest);
+  const guestIsGuest = roomData.guestPlayerIsGuest === true || (myPlayerId === guestId && isGuest);
+
+  // Use the ratings stored in the room at game start — these are always correct
+  // even when one player is a guest (guest never writes to Firebase, so loadProfile
+  // would return a stale 1200 for them)
+  const hostRatingStart  = roomData.hostRating  || STARTING_RATING;
+  const guestRatingStart = roomData.guestRating || STARTING_RATING;
+
+  // For win/loss/draw counts, fetch registered players' profiles (guests have in-memory stats)
+  const hostProf  = hostIsGuest  ? { wins:0, losses:0, draws:0 } : (await loadProfile(hostId));
+  const guestProf = guestIsGuest ? { wins:0, losses:0, draws:0 } : (await loadProfile(guestId));
+
   const hostOutcome  = getOutcome(winner, hostSeat);
   const guestOutcome = getOutcome(winner, guestSeat);
-  const ratingDiff   = Math.abs(hostProf.rating - guestProf.rating);
-  let hostDelta  = calcEloDelta(hostProf.rating,  guestProf.rating, hostOutcome);
-  let guestDelta = calcEloDelta(guestProf.rating, hostProf.rating,  guestOutcome);
+  const ratingDiff   = Math.abs(hostRatingStart - guestRatingStart);
+  let hostDelta  = calcEloDelta(hostRatingStart,  guestRatingStart, hostOutcome);
+  let guestDelta = calcEloDelta(guestRatingStart, hostRatingStart,  guestOutcome);
   if (winner === 'D' && ratingDiff < DRAW_DIFF_THRESH) { hostDelta = 0; guestDelta = 0; }
 
-  // Use a transaction so only ONE player writes to Firebase (prevents double-counting)
-  // But BOTH players calculate and display their own delta
+  // Transaction: only ONE client writes to Firebase
   const settledRef = roomRef.child('ratingSettled');
   let didSettle = false;
   await settledRef.transaction(cur => {
-    if (cur) return; // already settled
+    if (cur) return;
     didSettle = true;
     return true;
   });
 
   if (didSettle) {
     const hostUpdates = {
-      rating:   Math.max(0, hostProf.rating  + hostDelta),
-      wins:     hostProf.wins   + (hostOutcome  === 1   ? 1 : 0),
-      losses:   hostProf.losses + (hostOutcome  === 0   ? 1 : 0),
-      draws:    hostProf.draws  + (hostOutcome  === 0.5 ? 1 : 0),
-      username: roomData.usernameHost  || hostProf.username || ''
+      rating:   Math.max(0, hostRatingStart  + hostDelta),
+      wins:     (hostProf.wins   || 0) + (hostOutcome  === 1   ? 1 : 0),
+      losses:   (hostProf.losses || 0) + (hostOutcome  === 0   ? 1 : 0),
+      draws:    (hostProf.draws  || 0) + (hostOutcome  === 0.5 ? 1 : 0),
+      username: roomData.usernameHost  || ''
     };
     const guestUpdates = {
-      rating:   Math.max(0, guestProf.rating + guestDelta),
-      wins:     guestProf.wins   + (guestOutcome === 1   ? 1 : 0),
-      losses:   guestProf.losses + (guestOutcome === 0   ? 1 : 0),
-      draws:    guestProf.draws  + (guestOutcome === 0.5 ? 1 : 0),
-      username: roomData.usernameGuest || guestProf.username || ''
+      rating:   Math.max(0, guestRatingStart + guestDelta),
+      wins:     (guestProf.wins   || 0) + (guestOutcome === 1   ? 1 : 0),
+      losses:   (guestProf.losses || 0) + (guestOutcome === 0   ? 1 : 0),
+      draws:    (guestProf.draws  || 0) + (guestOutcome === 0.5 ? 1 : 0),
+      username: roomData.usernameGuest || ''
     };
 
-    // Determine which players are guests using room-level flags (covers opponent guests too)
-    const hostIsGuest  = roomData.hostPlayerIsGuest  === true || (myPlayerId === hostId  && isGuest);
-    const guestIsGuest = roomData.guestPlayerIsGuest === true || (myPlayerId === guestId && isGuest);
-
+    // Update guest in-memory stats
     if (myPlayerId === hostId && hostIsGuest) {
       guestStats = { ...hostUpdates };
       sessionStorage.setItem('ttt2_guest_stats', JSON.stringify(guestStats));
@@ -405,7 +412,7 @@ async function settleRating(roomData, winner) {
     if (writes.length) await Promise.all(writes);
   }
 
-  // Both players return their own delta regardless of who wrote to Firebase
+  // Both players return their own delta regardless of who wrote
   if (myPlayerId === hostId)  return hostDelta;
   if (myPlayerId === guestId) return guestDelta;
   return null;
