@@ -283,7 +283,8 @@ function backToUsername() {
     document.getElementById(id).classList.add('hidden'));
   document.getElementById('lobby-username').classList.remove('hidden');
   document.getElementById('username-error').textContent = '';
-  pendingUsername = '';
+  pendingUsername      = '';
+  pendingGuestUpgrade  = false; // don't transfer stats if user backed out
 }
 
 async function showLobbyMain(name) {
@@ -383,14 +384,14 @@ async function settleRating(roomData, winner) {
       username: roomData.usernameGuest || guestProf.username || ''
     };
 
-    // Determine which players are guests — never write guests to Firebase
-    const hostIsGuest  = (myPlayerId === hostId  && isGuest);
-    const guestIsGuest = (myPlayerId === guestId && isGuest);
+    // Determine which players are guests using room-level flags (covers opponent guests too)
+    const hostIsGuest  = roomData.hostPlayerIsGuest  === true || (myPlayerId === hostId  && isGuest);
+    const guestIsGuest = roomData.guestPlayerIsGuest === true || (myPlayerId === guestId && isGuest);
 
-    if (hostIsGuest) {
+    if (myPlayerId === hostId && hostIsGuest) {
       guestStats = { ...hostUpdates };
       sessionStorage.setItem('ttt2_guest_stats', JSON.stringify(guestStats));
-    } else if (guestIsGuest) {
+    } else if (myPlayerId === guestId && guestIsGuest) {
       guestStats = { ...guestUpdates };
       sessionStorage.setItem('ttt2_guest_stats', JSON.stringify(guestStats));
     }
@@ -438,10 +439,15 @@ async function showRatingDelta(delta) {
 }
 
 async function refreshLobbyRating() {
+  const el = document.getElementById('username-display');
+  if (!el) return;
+  if (isGuest) {
+    el.innerHTML = '👤 ' + myUsername + ' <span class="lobby-rating-badge guest-badge">GUEST</span>';
+    return;
+  }
   const profile = await loadProfile(myPlayerId);
   const rating  = profile.rating || STARTING_RATING;
-  const el      = document.getElementById('username-display');
-  if (el) el.innerHTML = myUsername + ' <span class="lobby-rating-badge">' + rating + ' pts</span>';
+  el.innerHTML = myUsername + ' <span class="lobby-rating-badge">' + rating + ' pts</span>';
 }
 
 // ─── Leaderboard ──────────────────────────────────────────────────────────────
@@ -572,6 +578,7 @@ function startPassAndPlay() {
   names         = { X: 'Player X', O: 'Player O' };
 
   document.getElementById('outer-win-svg').innerHTML = '';
+  scores = { X: 0, O: 0 };
   resetGameState();
 
   document.getElementById('lobby-screen').classList.add('hidden');
@@ -636,6 +643,7 @@ function startVsCPU(difficulty, playerSide) {
   isRanked  = false;
   names     = { [myPlayer]: myUsername || 'You', [cpuPlayer]: 'CPU (' + difficulty + ')' };
   resetGameState();
+  scores = { X: 0, O: 0 };
   document.getElementById('outer-win-svg').innerHTML = '';
   document.getElementById('lobby-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
@@ -851,6 +859,7 @@ async function quickMatch() {
   myRoomData.hostId       = myPlayerId;
   myRoomData.hostRating   = hostProfile.rating;
   myRoomData.ranked       = true;
+  if (isGuest) myRoomData.hostPlayerIsGuest = true;
   await db.ref('rooms/' + myRoomId).set(myRoomData);
   db.ref('rooms/' + myRoomId).onDisconnect().remove();
 
@@ -896,6 +905,7 @@ async function quickMatch() {
     await roomRef.child('guestId').set(myPlayerId);
     await roomRef.child('guestRating').set(guestProfile.rating);
     await roomRef.child('usernameGuest').set(myUsername);
+    if (isGuest) await roomRef.child('guestPlayerIsGuest').set(true);
     await roomRef.child('status').set('playing');
     await roomRef.child('players/' + joinerSeat).set(true);
     roomRef.child('players/' + joinerSeat).onDisconnect().set(false);
@@ -959,7 +969,8 @@ async function createRoom() {
     status:        'waiting',
     mode:          'private',
     createdAt:     Date.now(),
-    usernameHost:  myUsername
+    usernameHost:  myUsername,
+    hostId:        myPlayerId
   });
 
   roomRef.onDisconnect().remove();
@@ -1004,6 +1015,7 @@ async function joinRoom() {
   await roomRef.child('guestId').set(myPlayerId);
   await roomRef.child('guestRating').set(guestProf.rating);
   await roomRef.child('usernameGuest').set(myUsername);
+  if (isGuest) await roomRef.child('guestPlayerIsGuest').set(true);
   await roomRef.child('status').set('playing');
   await roomRef.child('players/' + joinerSeat).set(true);
   roomRef.child('players/' + joinerSeat).onDisconnect().set(false);
@@ -1043,9 +1055,10 @@ async function leaveRoom() {
   scores  = { X: 0, O: 0 };
 
   document.getElementById('game-screen').classList.add('hidden');
-  document.getElementById('room-info-bar').classList.remove('hidden');
+  document.getElementById('room-info-bar').classList.add('hidden'); // hide, not show
   document.getElementById('lobby-screen').classList.remove('hidden');
-  showLobbyPanel('lobby-main');
+  // Re-show lobby main (also restores guest upgrade banner if in guest mode)
+  await showLobbyMain(myUsername);
   const jiEl = document.getElementById('join-input'); if (jiEl) jiEl.value = '';
   setLobbyError('');
   ['cpu-picker','private-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
@@ -1113,8 +1126,12 @@ async function startOnlineGame() {
   // Listen for username/rating of late-joining guest
   roomRef.child('usernameGuest').on('value', snap => {
     if (snap.exists()) {
-      names[guestSeat] = snap.val();
-      document.getElementById('pc-name-' + guestSeat.toLowerCase()).textContent = snap.val();
+      const gName = snap.val();
+      names[guestSeat] = gName;
+      document.getElementById('pc-name-' + guestSeat.toLowerCase()).textContent = gName;
+      // Also update cached myName/oppName so rematch names are correct
+      if (myPlayer === guestSeat) myName  = gName;
+      else                        oppName = gName;
     }
   });
   roomRef.child('guestRating').on('value', snap => {
@@ -1291,8 +1308,8 @@ async function startOnlineGame() {
     }
   });
 
-  // Start timer immediately
-  startInactivityTimer();
+  // Don't start timer here — the game listener will start it with the
+  // correct server timestamp when the first game state arrives
 }
 
 // ─── Build DOM ────────────────────────────────────────────────────────────────
@@ -1409,7 +1426,12 @@ function showEndOverlay(result, subtitle = '') {
     newBtn.textContent = (gameMode === 'online') ? '↺  Rematch' : '↺  New Game';
   }
 
-  if (result === 'win') {
+  if (result === 'pnp-win') {
+    icon.textContent  = '🏆';
+    title.textContent = subtitle.split(' ')[0] + ' Wins!';
+    title.style.color = 'var(--active-glow)';
+    sub.textContent   = '';
+  } else if (result === 'win') {
     icon.textContent  = '🏆';
     title.textContent = 'You Win!';
     title.style.color = 'var(--active-glow)';
@@ -1473,7 +1495,8 @@ function renderStatus() {
         showEndOverlay(playerWon ? 'win' : 'loss', playerWon ? 'Great play!' : 'The CPU got you.');
       } else {
         el.innerHTML = `<span class="win-banner" style="color:${col}">${outerWinner} WINS!</span>`;
-        showEndOverlay('win', `${outerWinner} wins this round!`);
+        // Pass & Play: show which side won, not "you win"
+        showEndOverlay('pnp-win', `${outerWinner} wins this round!`);
       }
     } else {
       const youWon = outerWinner === myPlayer;
