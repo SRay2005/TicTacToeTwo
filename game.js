@@ -441,6 +441,11 @@ function showInstantDelta(winner) {
   // Update both cached ratings so rematch ELO is calculated from correct post-game values
   myGameRating  = Math.max(0, myGameRating  + myDelta);
   oppGameRating = Math.max(0, oppGameRating + oppDelta);
+  // Keep guestStats in sync with myGameRating
+  if (isGuest) {
+    guestStats.rating = myGameRating;
+    sessionStorage.setItem('ttt2_guest_stats', JSON.stringify(guestStats));
+  }
 }
 
 async function showRatingDelta(delta) {
@@ -1057,6 +1062,45 @@ async function cancelRoom() {
 
 // ─── Leave ────────────────────────────────────────────────────────────────────
 async function leaveRoom() {
+  // If leaving a ranked game mid-play, show forfeit delta first
+  const wasRanked  = isRanked;
+  const wasOnline  = gameMode === 'online';
+  const wasInGame  = !outerWinner;
+  const savedRoom  = roomRef;
+  const savedPlayer = myPlayer;
+
+  if (wasOnline && wasRanked && wasInGame && !ratingShown && savedRoom && savedPlayer) {
+    ratingShown = true;
+    const forfeitWinner = savedPlayer === 'X' ? 'O' : 'X';
+    // Calculate and show the negative delta immediately
+    showInstantDelta(forfeitWinner);
+    // Write forfeit so opponent gets their win screen
+    await savedRoom.child('forfeit').set({ loser: savedPlayer, ts: Date.now() });
+    // Show a blocking screen: "You forfeited — [delta] — OK to go home"
+    await new Promise(resolve => {
+      const overlay = document.getElementById('end-overlay');
+      const icon    = document.getElementById('end-icon');
+      const title   = document.getElementById('end-title');
+      const sub     = document.getElementById('end-subtitle');
+      const newBtn  = document.getElementById('end-newgame-btn');
+      const homeBtn = overlay.querySelector('.end-actions button:last-child');
+      icon.textContent  = '💀';
+      title.textContent = 'You Forfeited';
+      title.style.color = 'var(--x-color)';
+      sub.textContent   = 'You left the game early.';
+      newBtn.style.display = 'none';
+      const origOnclick = homeBtn.onclick;
+      homeBtn.textContent = 'OK → Home';
+      homeBtn.onclick = () => {
+        homeBtn.onclick = origOnclick;
+        homeBtn.textContent = '⌂  Home';
+        overlay.classList.add('hidden');
+        resolve();
+      };
+      overlay.classList.remove('hidden');
+    });
+  }
+
   hideEndOverlay();
   clearInactivityTimer();
   setIngameNewGameVisible(true);
@@ -1066,24 +1110,22 @@ async function leaveRoom() {
   if (deltaEl) deltaEl.classList.add('hidden');
   cpuDifficulty = null; cpuPlayer = null; cpuThinking = false;
   document.body.style.setProperty('--bg-tint', 'transparent');
-  // Remove our ready flag so opponent's button resets
   if (roomRef && myPlayer) {
     await roomRef.child('ready/' + myPlayer).remove();
   }
   detachListeners();
 
-  if (gameMode === 'online' && roomRef) {
+  if (wasOnline && roomRef) {
     roomRef.onDisconnect().cancel();
-    await roomRef.child(`players/${myPlayer}`).set(false);
+    await roomRef.child('players/' + (myPlayer || savedPlayer)).set(false);
   }
 
   roomRef = null; roomId = null; myPlayer = null; gameMode = null;
   scores  = { X: 0, O: 0 };
 
   document.getElementById('game-screen').classList.add('hidden');
-  document.getElementById('room-info-bar').classList.add('hidden'); // hide, not show
+  document.getElementById('room-info-bar').classList.add('hidden');
   document.getElementById('lobby-screen').classList.remove('hidden');
-  // Re-show lobby main (also restores guest upgrade banner if in guest mode)
   await showLobbyMain(myUsername);
   const jiEl = document.getElementById('join-input'); if (jiEl) jiEl.value = '';
   setLobbyError('');
