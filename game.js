@@ -73,10 +73,13 @@ function generateGuestName() {
 }
 
 function playAsGuest() {
-  isGuest    = true;
-  myUsername = generateGuestName();
-  guestStats = { wins: 0, losses: 0, draws: 0, rating: STARTING_RATING };
-  // Don't write to Firebase — guest has no persistent profile
+  isGuest = true;
+  // Keep same guest name for this tab session (survives tab switches but not closes)
+  myUsername = sessionStorage.getItem('ttt2_guest_name') || generateGuestName();
+  sessionStorage.setItem('ttt2_guest_name', myUsername);
+  // Keep stats from this session if returning to lobby
+  const savedStats = sessionStorage.getItem('ttt2_guest_stats');
+  guestStats = savedStats ? JSON.parse(savedStats) : { wins: 0, losses: 0, draws: 0, rating: STARTING_RATING };
   showLobbyMain(myUsername);
   document.getElementById('lobby-guest-upgrade').classList.remove('hidden');
 }
@@ -380,18 +383,23 @@ async function settleRating(roomData, winner) {
       username: roomData.usernameGuest || guestProf.username || ''
     };
 
-    // If I'm the host and a guest, update in-memory instead of Firebase
-    if (myPlayerId === hostId && isGuest) {
+    // Determine which players are guests — never write guests to Firebase
+    const hostIsGuest  = (myPlayerId === hostId  && isGuest);
+    const guestIsGuest = (myPlayerId === guestId && isGuest);
+
+    if (hostIsGuest) {
       guestStats = { ...hostUpdates };
-    } else if (myPlayerId === guestId && isGuest) {
+      sessionStorage.setItem('ttt2_guest_stats', JSON.stringify(guestStats));
+    } else if (guestIsGuest) {
       guestStats = { ...guestUpdates };
-    } else {
-      // Write to Firebase only for registered players
-      const writes = [];
-      if (!isGuest || myPlayerId !== hostId)  writes.push(db.ref('players/' + hostId).update(hostUpdates));
-      if (!isGuest || myPlayerId !== guestId) writes.push(db.ref('players/' + guestId).update(guestUpdates));
-      await Promise.all(writes);
+      sessionStorage.setItem('ttt2_guest_stats', JSON.stringify(guestStats));
     }
+
+    // Write to Firebase only for non-guest players
+    const writes = [];
+    if (!hostIsGuest)  writes.push(db.ref('players/' + hostId).update(hostUpdates));
+    if (!guestIsGuest) writes.push(db.ref('players/' + guestId).update(guestUpdates));
+    if (writes.length) await Promise.all(writes);
   }
 
   // Both players return their own delta regardless of who wrote to Firebase
