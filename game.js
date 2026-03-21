@@ -288,7 +288,8 @@ function backToUsername() {
 }
 
 async function showLobbyMain(name) {
-  ['lobby-username','lobby-set-password','lobby-login-password'].forEach(id =>
+  ['lobby-username','lobby-set-password','lobby-login-password',
+   'lobby-searching','lobby-waiting'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
   document.getElementById('lobby-main').classList.remove('hidden');
   ['cpu-picker','private-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
