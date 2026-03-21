@@ -9,7 +9,7 @@
   --won-x: rgba(255,77,77,0.13);
   --won-o: rgba(77,170,255,0.13);
   --text: #e8e8e8;
-  --muted: #555;
+  --muted: #888;
   --cell-size: 44px;
   --bg-tint: transparent;
 }
@@ -126,9 +126,9 @@ body::after {
 }
 .htp-section { margin-bottom: 18px; }
 .htp-tag { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
-.htp-section p { font-size: 0.72rem; color: #aaa; line-height: 1.7; letter-spacing: 0.03em; }
+.htp-section p { font-size: 0.72rem; color: #bbb; line-height: 1.7; letter-spacing: 0.03em; }
 .htp-section em { color: var(--text); font-style: normal; font-weight: 700; }
-.htp-example { margin-top: 8px; background: #1a1a1a; border-left: 2px solid var(--active-glow); padding: 8px 12px; font-size: 0.66rem; color: #888; line-height: 1.6; border-radius: 0 3px 3px 0; }
+.htp-example { margin-top: 8px; background: #1a1a1a; border-left: 2px solid var(--active-glow); padding: 8px 12px; font-size: 0.66rem; color: #999; line-height: 1.6; border-radius: 0 3px 3px 0; }
 .hx { color: var(--active-glow); }
 .htp-legend { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px; display: flex; flex-direction: column; gap: 7px; }
 .legend-item { display: flex; align-items: center; gap: 9px; font-size: 0.62rem; color: var(--muted); letter-spacing: 0.06em; }
@@ -150,7 +150,7 @@ body::after {
   width: 100%;
   transition: border-color 0.15s;
 }
-.auth-input::placeholder { color: #333; font-size: 0.68rem; letter-spacing: 0.12em; }
+.auth-input::placeholder { color: #555; font-size: 0.68rem; letter-spacing: 0.12em; }
 .auth-input:focus { border-color: var(--active-glow); }
 
 .auth-username-chip {
@@ -216,9 +216,9 @@ body::after {
   color: var(--text); padding: 11px 14px; border-radius: 3px;
   outline: none; text-align: center; transition: border-color 0.15s; width: 100%;
 }
-#username-input::placeholder { color: #333; font-size: 0.8rem; letter-spacing: 0.15em; }
+#username-input::placeholder { color: #555; font-size: 0.8rem; letter-spacing: 0.15em; }
 #username-input:focus { border-color: var(--active-glow); }
-.join-row input::placeholder { color: #333; font-size: 0.8rem; letter-spacing: 0.2em; }
+.join-row input::placeholder { color: #555; font-size: 0.8rem; letter-spacing: 0.2em; }
 .join-row input:focus { border-color: var(--o-color); }
 
 /* Username display chip */
@@ -533,7 +533,7 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 .cell.just-placed .cell-symbol { animation:placePop 0.22s ease-out forwards; display:inline-block; }
 
 /* ── Hint ────────────────────────────────────────────────────────────────── */
-.hint { font-size:0.58rem; color:#333; letter-spacing:0.1em; text-align:center; max-width:420px; line-height:1.8; white-space: pre-line; }
+.hint { font-size:0.58rem; color:#666; letter-spacing:0.1em; text-align:center; max-width:420px; line-height:1.8; white-space: pre-line; }
 
 /* ── Rating display ─────────────────────────────────────────────────────── */
 .pc-rating {
@@ -563,7 +563,7 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
   vertical-align: middle;
 }
 .lobby-rating-badge.guest-badge {
-  color: #888;
+  color: #999;
   border: 1px solid #333;
   padding: 1px 6px;
   border-radius: 10px;
@@ -612,7 +612,7 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 .guest-upgrade-text {
   font-size: 0.62rem;
   letter-spacing: 0.06em;
-  color: #aaa;
+  color: #bbb;
 }
 .guest-upgrade-text strong { color: var(--active-glow); font-weight: 700; }
 
@@ -868,7 +868,7 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
   .hint {
     font-size: 0.48rem;
     line-height: 1.4;
-    color: #252525;
+    color: #555;
     flex-shrink: 0;
     text-align: center;
   }
