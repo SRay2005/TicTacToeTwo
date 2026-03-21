@@ -82,13 +82,20 @@ body::after {
 .htp-mobile-btn {
   display: none; /* hidden on desktop, shown on mobile via media query */
   font-family: 'Space Mono', monospace;
-  font-size: 0.6rem; font-weight: 700;
+  font-size: 0.68rem; font-weight: 700;
   letter-spacing: 0.1em; text-transform: uppercase;
-  padding: 7px 14px;
-  background: var(--panel); border: 1px solid var(--border);
-  color: var(--muted); border-radius: 3px; cursor: pointer; transition: all 0.15s;
+  padding: 10px 18px;
+  background: var(--panel);
+  border: 1px solid rgba(255,224,102,0.4);
+  color: var(--active-glow);
+  border-radius: 4px; cursor: pointer; transition: all 0.2s;
+  box-shadow: 0 0 12px rgba(255,224,102,0.1);
 }
-.htp-mobile-btn:hover { border-color: var(--active-glow); color: var(--active-glow); }
+.htp-mobile-btn:hover {
+  border-color: var(--active-glow);
+  background: rgba(255,224,102,0.08);
+  box-shadow: 0 0 20px rgba(255,224,102,0.2);
+}
 
 /* ── HTP Modal ───────────────────────────────────────────────────────────── */
 .modal-backdrop {
