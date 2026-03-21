@@ -297,7 +297,8 @@ async function showLobbyMain(name) {
   // Load rating and display alongside username
   const el = document.getElementById('username-display');
   if (isGuest) {
-    el.innerHTML = '👤 ' + name + ' <span class="lobby-rating-badge guest-badge">GUEST</span>';
+    const gRating = guestStats.rating || STARTING_RATING;
+    el.innerHTML = '👤 ' + name + ' <span class="lobby-rating-badge guest-badge">' + gRating + ' pts (guest)</span>';
   } else {
     const profile = await loadProfile(myPlayerId);
     const rating  = profile.rating || STARTING_RATING;
@@ -443,7 +444,8 @@ async function refreshLobbyRating() {
   const el = document.getElementById('username-display');
   if (!el) return;
   if (isGuest) {
-    el.innerHTML = '👤 ' + myUsername + ' <span class="lobby-rating-badge guest-badge">GUEST</span>';
+    const gRating = guestStats.rating || STARTING_RATING;
+    el.innerHTML = '👤 ' + myUsername + ' <span class="lobby-rating-badge guest-badge">' + gRating + ' pts (guest)</span>';
     return;
   }
   const profile = await loadProfile(myPlayerId);
@@ -1060,6 +1062,8 @@ async function leaveRoom() {
   document.getElementById('lobby-screen').classList.remove('hidden');
   // Re-show lobby main (also restores guest upgrade banner if in guest mode)
   await showLobbyMain(myUsername);
+  // Refresh rating after a short delay to ensure Firebase write has propagated
+  setTimeout(refreshLobbyRating, 1500);
   const jiEl = document.getElementById('join-input'); if (jiEl) jiEl.value = '';
   setLobbyError('');
   ['cpu-picker','private-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
@@ -1618,7 +1622,7 @@ function applyMove(b, c) {
 async function restartGame() {
   const deltaEl = document.getElementById('end-rating-delta');
   if (deltaEl) deltaEl.classList.add('hidden');
-  if (isRanked) refreshLobbyRating();
+  refreshLobbyRating(); // always refresh so guest and ranked ratings update
   document.body.style.setProperty('--bg-tint', 'transparent');
 
   if (gameMode === 'local') {
