@@ -1592,10 +1592,12 @@ async function restartGame() {
   if (gameMode === 'local') {
     hideEndOverlay();
     clearInactivityTimer();
+    document.getElementById('outer-win-svg').innerHTML = '';
     resetGameState();
     cpuThinking = false;
     buildGrid();
     render();
+    if (cpuDifficulty && cpuPlayer === currentPlayer) scheduleCpuMove();
     return;
   }
 
