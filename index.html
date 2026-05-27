@@ -61,6 +61,7 @@
   <!-- ── Lobby Screen ───────────────────────────────────────────────── -->
   <div id="lobby-screen">
     <button class="htp-trigger" onclick="openHTP()">how to play?</button>
+    <button id="lobby-sound-toggle" class="sound-toggle" onclick="toggleSound()"></button>
     <div class="lobby-box">
       <div class="game-title">
         <span class="title-main">Tic · Tac · Toe</span>
@@ -202,6 +203,7 @@
   <!-- ── Game Screen ────────────────────────────────────────────────── -->
   <div id="game-screen" class="hidden">
     <button class="htp-trigger in-game" onclick="openHTP()">how to play?</button>
+    <button id="game-sound-toggle" class="sound-toggle in-game" onclick="toggleSound()"></button>
 
     <!-- Desktop: three-column layout. Mobile: stacked. -->
     <div class="game-layout">

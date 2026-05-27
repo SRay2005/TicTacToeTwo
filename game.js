@@ -25,8 +25,31 @@ const db = firebase.database();
 
 // ─── Sound Effects ────────────────────────────────────────────────────────────
 const MOVE_SOUND_SRC = 'data:audio/wav;base64,UklGRl4AAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YToAAAAAAAAAAAEBAQICAgMDAwQEBAUFBQYGBgcHCAgJCQoKCwsMDA0NDg4PDxAQERESExMUFBQVFhYXFxcYGBkZGhoaGxsbHBwdHR0eHh8fICAgISEhIiIjIyQkJSUmJicoKCkpKioqKyssLC0tLi4vLzAwMDAwLz8/Pz8=';
+const SOUND_MUTED_KEY = 'ttt2_sound_muted';
 let moveSound = null;
 let moveSoundCtx = null;
+let isSoundMuted = localStorage.getItem(SOUND_MUTED_KEY) === '1';
+
+function updateSoundButtons() {
+  ['lobby-sound-toggle', 'game-sound-toggle'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.textContent = isSoundMuted ? 'sound off' : 'sound on';
+    btn.classList.toggle('muted', isSoundMuted);
+    btn.setAttribute('aria-pressed', isSoundMuted ? 'true' : 'false');
+    btn.title = isSoundMuted ? 'Unmute sounds' : 'Mute sounds';
+  });
+}
+
+function setSoundMuted(muted) {
+  isSoundMuted = muted;
+  localStorage.setItem(SOUND_MUTED_KEY, muted ? '1' : '0');
+  updateSoundButtons();
+}
+
+function toggleSound() {
+  setSoundMuted(!isSoundMuted);
+}
 
 function playMoveSoundFallback() {
   try {
@@ -50,6 +73,7 @@ function playMoveSoundFallback() {
 }
 
 function playMoveSound() {
+  if (isSoundMuted) return;
   try {
     if (!moveSound) {
       moveSound = new Audio(MOVE_SOUND_SRC);
@@ -1820,6 +1844,7 @@ function getWinLineCoords(cells) {
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 initLobby();
+updateSoundButtons();
 
 // ─── Dots Animation ───────────────────────────────────────────────────────────
 let dotCount = 0;
