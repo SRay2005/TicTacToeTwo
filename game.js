@@ -29,6 +29,7 @@ const SOUND_MUTED_KEY = 'ttt2_sound_muted';
 const MUSIC_MUTED_KEY = 'ttt2_music_muted';
 let moveSound = null;
 let moveSoundCtx = null;
+let moveSoundPrimed = false;
 let isSoundMuted = localStorage.getItem(SOUND_MUTED_KEY) === '1';
 let isMusicMuted = localStorage.getItem(MUSIC_MUTED_KEY) === '1';
 let musicCtx = null;
@@ -158,11 +159,60 @@ function setMusicMuted(muted) {
   isMusicMuted = muted;
   localStorage.setItem(MUSIC_MUTED_KEY, muted ? '1' : '0');
   updateMusicButton();
+  if (isMusicMuted) {
+    stopBackgroundMusic();
+  }
   updateBackgroundMusic();
 }
 
 function toggleMusic() {
   setMusicMuted(!isMusicMuted);
+}
+
+function ensureMoveSound() {
+  if (!moveSound) {
+    moveSound = new Audio(MOVE_SOUND_SRC);
+    moveSound.preload = 'auto';
+    moveSound.volume = 0.25;
+    moveSound.load();
+  }
+  return moveSound;
+}
+
+function primeMoveSoundEngine() {
+  if (moveSoundPrimed) return;
+  moveSoundPrimed = true;
+  try {
+    const audio = ensureMoveSound();
+    const prevMuted = audio.muted;
+    audio.muted = true;
+    audio.currentTime = 0;
+    const warmupPlay = audio.play();
+    if (warmupPlay && typeof warmupPlay.then === 'function') {
+      warmupPlay
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.muted = prevMuted;
+        })
+        .catch(() => { audio.muted = prevMuted; });
+    } else {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.muted = prevMuted;
+    }
+  } catch (_) {}
+}
+
+function setupAudioWarmup() {
+  const warmup = () => {
+    primeMoveSoundEngine();
+    if (moveSoundCtx && moveSoundCtx.state === 'suspended') {
+      moveSoundCtx.resume().catch(() => {});
+    }
+  };
+  document.addEventListener('pointerdown', warmup, { once: true, passive: true });
+  document.addEventListener('keydown', warmup, { once: true });
 }
 
 function playMoveSoundFallback() {
@@ -189,13 +239,11 @@ function playMoveSoundFallback() {
 function playMoveSound() {
   if (isSoundMuted) return;
   try {
-    if (!moveSound) {
-      moveSound = new Audio(MOVE_SOUND_SRC);
-      moveSound.preload = 'auto';
-      moveSound.volume = 0.25;
-    }
-    moveSound.currentTime = 0;
-    const playback = moveSound.play();
+    const audio = ensureMoveSound();
+    audio.muted = false;
+    primeMoveSoundEngine();
+    audio.currentTime = 0;
+    const playback = audio.play();
     if (playback && typeof playback.catch === 'function') {
       playback.catch(() => playMoveSoundFallback());
     }
@@ -1967,6 +2015,7 @@ initLobby();
 updateSoundButtons();
 updateMusicButton();
 updateBackgroundMusic();
+setupAudioWarmup();
 
 // ─── Dots Animation ───────────────────────────────────────────────────────────
 let dotCount = 0;
