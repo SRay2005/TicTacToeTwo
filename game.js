@@ -23,6 +23,49 @@ appCheck.activate(
 
 const db = firebase.database();
 
+// ─── Sound Effects ────────────────────────────────────────────────────────────
+const MOVE_SOUND_SRC = 'data:audio/wav;base64,UklGRl4AAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YToAAAAAAAAAAAEBAQICAgMDAwQEBAUFBQYGBgcHCAgJCQoKCwsMDA0NDg4PDxAQERESExMUFBQVFhYXFxcYGBkZGhoaGxsbHBwdHR0eHh8fICAgISEhIiIjIyQkJSUmJicoKCkpKioqKyssLC0tLi4vLzAwMDAwLz8/Pz8=';
+let moveSound = null;
+let moveSoundCtx = null;
+
+function playMoveSoundFallback() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!moveSoundCtx) moveSoundCtx = new Ctx();
+    const osc  = moveSoundCtx.createOscillator();
+    const gain = moveSoundCtx.createGain();
+    const now  = moveSoundCtx.currentTime;
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(660, now + 0.06);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.08, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+    osc.connect(gain);
+    gain.connect(moveSoundCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.09);
+  } catch (_) {}
+}
+
+function playMoveSound() {
+  try {
+    if (!moveSound) {
+      moveSound = new Audio(MOVE_SOUND_SRC);
+      moveSound.preload = 'auto';
+      moveSound.volume = 0.25;
+    }
+    moveSound.currentTime = 0;
+    const playback = moveSound.play();
+    if (playback && typeof playback.catch === 'function') {
+      playback.catch(() => playMoveSoundFallback());
+    }
+  } catch (_) {
+    playMoveSoundFallback();
+  }
+}
+
 // ─── ELO / Rating ────────────────────────────────────────────────────────────
 const STARTING_RATING  = 1200;
 const ELO_K            = 32;
@@ -51,6 +94,8 @@ let gameListener    = null;
 let scoresListener  = null;
 let playersListener = null;
 let readyListener   = null;
+let hasReceivedInitialGameState = false;
+let lastSyncedMoveCount = 0;
 const mySessionId   = Math.random().toString(36).slice(2);
 
 // ─── Username ────────────────────────────────────────────────────────────────
@@ -702,6 +747,7 @@ function scheduleCpuMove() {
     const move = getCpuMove();
     if (move) {
       applyMove(move.b, move.c);
+      playMoveSound();
       render();
       if (outerWinner) {
         scores[outerWinner]++;
@@ -809,6 +855,8 @@ function resetGameState() {
   ratingShown   = false;
   lastMoveB     = -1;
   lastMoveC     = -1;
+  hasReceivedInitialGameState = false;
+  lastSyncedMoveCount = 0;
 }
 
 function initialGameState() {
@@ -1210,9 +1258,18 @@ async function startOnlineGame() {
     }
   });
 
+  hasReceivedInitialGameState = false;
+  lastSyncedMoveCount = moveCount;
   gameListener = roomRef.child('game').on('value', snap => {
     if (!snap.exists()) return;
     const gameData = snap.val();
+    const incomingMoveCount = gameData.moveCount || 0;
+    if (!hasReceivedInitialGameState) {
+      hasReceivedInitialGameState = true;
+    } else if (incomingMoveCount > lastSyncedMoveCount) {
+      playMoveSound();
+    }
+    lastSyncedMoveCount = incomingMoveCount;
     deserializeGame(gameData);
 
     // Only reset overlay/button when a fresh game starts (not on game-over syncs)
@@ -1634,8 +1691,10 @@ async function handleClick(b, c) {
   if (cpuDifficulty && (currentPlayer === cpuPlayer || cpuThinking)) return;
 
   applyMove(b, c);
+  playMoveSound();
 
   if (gameMode === 'online') {
+    lastSyncedMoveCount = moveCount;
     await roomRef.child('game').set(serializeGame({
       boards, boardWinner, outerWinner, activeBoard, currentPlayer, moveCount,
       lastMoveB, lastMoveC
