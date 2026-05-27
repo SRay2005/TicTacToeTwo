@@ -26,18 +26,24 @@ const db = firebase.database();
 // ─── Sound Effects ────────────────────────────────────────────────────────────
 const MOVE_SOUND_SRC = 'data:audio/wav;base64,UklGRl4AAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YToAAAAAAAAAAAEBAQICAgMDAwQEBAUFBQYGBgcHCAgJCQoKCwsMDA0NDg4PDxAQERESExMUFBQVFhYXFxcYGBkZGhoaGxsbHBwdHR0eHh8fICAgISEhIiIjIyQkJSUmJicoKCkpKioqKyssLC0tLi4vLzAwMDAwLz8/Pz8=';
 const SOUND_MUTED_KEY = 'ttt2_sound_muted';
+const MUSIC_MUTED_KEY = 'ttt2_music_muted';
 let moveSound = null;
 let moveSoundCtx = null;
 let isSoundMuted = localStorage.getItem(SOUND_MUTED_KEY) === '1';
+let isMusicMuted = localStorage.getItem(MUSIC_MUTED_KEY) === '1';
+let musicCtx = null;
+let musicScheduler = null;
+let musicMode = null; // 'soft' | 'thrill' | null
+let musicStep = 0;
 
 function updateSoundButtons() {
   ['lobby-sound-toggle', 'game-sound-toggle'].forEach(id => {
     const btn = document.getElementById(id);
     if (!btn) return;
-    btn.textContent = isSoundMuted ? 'sound off' : 'sound on';
+    btn.textContent = isSoundMuted ? 'sfx off' : 'sfx on';
     btn.classList.toggle('muted', isSoundMuted);
     btn.setAttribute('aria-pressed', isSoundMuted ? 'true' : 'false');
-    btn.title = isSoundMuted ? 'Unmute sounds' : 'Mute sounds';
+    btn.title = isSoundMuted ? 'Unmute SFX' : 'Mute SFX';
   });
 }
 
@@ -49,6 +55,114 @@ function setSoundMuted(muted) {
 
 function toggleSound() {
   setSoundMuted(!isSoundMuted);
+}
+
+function updateMusicButton() {
+  const btn = document.getElementById('lobby-music-toggle');
+  if (!btn) return;
+  btn.textContent = isMusicMuted ? 'music off' : 'music on';
+  btn.classList.toggle('muted', isMusicMuted);
+  btn.setAttribute('aria-pressed', isMusicMuted ? 'true' : 'false');
+  btn.title = isMusicMuted ? 'Unmute music' : 'Mute music';
+}
+
+function ensureMusicContext() {
+  if (!musicCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    musicCtx = new Ctx();
+  }
+  if (musicCtx.state === 'suspended') {
+    musicCtx.resume().catch(() => {});
+  }
+  return musicCtx;
+}
+
+function playMusicNote(freq, duration, volume, type = 'sine') {
+  const ctx = ensureMusicContext();
+  if (!ctx || !freq || freq <= 0) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const now = ctx.currentTime;
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(volume, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + duration + 0.02);
+}
+
+function runSoftMusicStep() {
+  const melody = [261.63, 329.63, 392.0, 329.63, 293.66, 349.23, 440.0, 349.23];
+  const bass = [130.81, 146.83, 164.81, 146.83];
+  const m = melody[musicStep % melody.length];
+  const b = bass[musicStep % bass.length];
+  playMusicNote(m, 0.52, 0.028, 'triangle');
+  if (musicStep % 2 === 0) playMusicNote(b, 0.62, 0.018, 'sine');
+  musicStep++;
+}
+
+function runThrillMusicStep() {
+  const melody = [392.0, 466.16, 523.25, 587.33, 523.25, 466.16, 440.0, 523.25];
+  const pulse = [196.0, 220.0, 246.94, 220.0];
+  const m = melody[musicStep % melody.length];
+  const p = pulse[musicStep % pulse.length];
+  playMusicNote(m, 0.24, 0.035, 'sawtooth');
+  playMusicNote(p, 0.18, 0.015, 'square');
+  musicStep++;
+}
+
+function stopBackgroundMusic() {
+  if (musicScheduler) {
+    clearInterval(musicScheduler);
+    musicScheduler = null;
+  }
+  musicMode = null;
+  musicStep = 0;
+}
+
+function startBackgroundMusic(mode) {
+  if (isMusicMuted) return;
+  if (musicMode === mode && musicScheduler) return;
+  stopBackgroundMusic();
+  if (!ensureMusicContext()) return;
+  musicMode = mode;
+  musicStep = 0;
+  if (mode === 'soft') {
+    runSoftMusicStep();
+    musicScheduler = setInterval(runSoftMusicStep, 560);
+  } else if (mode === 'thrill') {
+    runThrillMusicStep();
+    musicScheduler = setInterval(runThrillMusicStep, 260);
+  }
+}
+
+function updateBackgroundMusic() {
+  const lobbyScreen = document.getElementById('lobby-screen');
+  const gameScreen = document.getElementById('game-screen');
+  const searching = document.getElementById('lobby-searching');
+  const lobbyVisible = lobbyScreen && !lobbyScreen.classList.contains('hidden');
+  const gameVisible = gameScreen && !gameScreen.classList.contains('hidden');
+  if (!lobbyVisible || gameVisible) {
+    stopBackgroundMusic();
+    return;
+  }
+  const isSearching = searching && !searching.classList.contains('hidden');
+  startBackgroundMusic(isSearching ? 'thrill' : 'soft');
+}
+
+function setMusicMuted(muted) {
+  isMusicMuted = muted;
+  localStorage.setItem(MUSIC_MUTED_KEY, muted ? '1' : '0');
+  updateMusicButton();
+  updateBackgroundMusic();
+}
+
+function toggleMusic() {
+  setMusicMuted(!isMusicMuted);
 }
 
 function playMoveSoundFallback() {
@@ -362,6 +476,7 @@ async function showLobbyMain(name) {
     document.getElementById(id).classList.add('hidden'));
   document.getElementById('lobby-main').classList.remove('hidden');
   ['cpu-picker','private-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+  updateBackgroundMusic();
 
   // Load rating and display alongside username
   const el = document.getElementById('username-display');
@@ -683,6 +798,7 @@ function startPassAndPlay() {
 
   document.getElementById('lobby-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
+  updateBackgroundMusic();
   document.getElementById('game-subtitle-left').textContent = 'Pass & Play';
   document.getElementById('room-info-bar').classList.add('hidden');
   document.getElementById('pc-name-x').textContent = names.X;
@@ -749,6 +865,7 @@ function startVsCPU(difficulty, playerSide) {
   document.getElementById('outer-win-svg').innerHTML = '';
   document.getElementById('lobby-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
+  updateBackgroundMusic();
   document.getElementById('game-subtitle-left').textContent = 'vs CPU';
   document.getElementById('room-info-bar').classList.add('hidden');
   document.getElementById('pc-name-x').textContent = names.X;
@@ -928,6 +1045,7 @@ function showLobbyPanel(panelId) {
     document.getElementById(id).classList.add('hidden');
   });
   document.getElementById(panelId).classList.remove('hidden');
+  updateBackgroundMusic();
 }
 
 // ─── Quick Match ──────────────────────────────────────────────────────────────
@@ -1200,6 +1318,7 @@ async function leaveRoom() {
   document.getElementById('game-screen').classList.add('hidden');
   document.getElementById('room-info-bar').classList.add('hidden');
   document.getElementById('lobby-screen').classList.remove('hidden');
+  updateBackgroundMusic();
   await showLobbyMain(myUsername);
   const jiEl = document.getElementById('join-input'); if (jiEl) jiEl.value = '';
   setLobbyError('');
@@ -1220,6 +1339,7 @@ function detachListeners() {
 async function startOnlineGame() {
   document.getElementById('lobby-screen').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
+  updateBackgroundMusic();
   document.getElementById('game-subtitle-left').textContent = 'Online';
   document.getElementById('room-info-bar').classList.remove('hidden');
   document.getElementById('room-info-label').textContent = 'Room: ' + roomId;
@@ -1845,6 +1965,8 @@ function getWinLineCoords(cells) {
 // ─── Init ────────────────────────────────────────────────────────────────────
 initLobby();
 updateSoundButtons();
+updateMusicButton();
+updateBackgroundMusic();
 
 // ─── Dots Animation ───────────────────────────────────────────────────────────
 let dotCount = 0;
