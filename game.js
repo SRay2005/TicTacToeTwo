@@ -31,7 +31,7 @@ let moveSound = null;
 let moveSoundCtx = null;
 let moveSoundPrimed = false;
 let isSoundMuted = localStorage.getItem(SOUND_MUTED_KEY) === '1';
-let isMusicMuted = localStorage.getItem(MUSIC_MUTED_KEY) === '1';
+let isMusicMuted = false;
 let musicCtx = null;
 let musicScheduler = null;
 let musicMode = null; // 'soft' | 'thrill' | null
@@ -180,6 +180,9 @@ function toggleMusic() {
   unlockMusicPlayback();
   setMusicMuted(!isMusicMuted);
 }
+
+// Music always defaults to ON on fresh page load.
+localStorage.setItem(MUSIC_MUTED_KEY, '0');
 
 function ensureMoveSound() {
   if (!moveSound) {
