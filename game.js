@@ -35,8 +35,8 @@ let isMusicMuted = false;
 let musicCtx = null;
 let musicScheduler = null;
 let musicMode = null; // 'soft' | 'thrill' | null
+let desiredMusicMode = null; // queued mode while audio context is locked
 let musicStep = 0;
-let isMusicUnlocked = false;
 
 function updateSoundButtons() {
   ['lobby-sound-toggle', 'game-sound-toggle'].forEach(id => {
@@ -74,19 +74,16 @@ function ensureMusicContext() {
     if (!Ctx) return null;
     musicCtx = new Ctx();
   }
-  if (musicCtx.state === 'suspended') {
-    musicCtx.resume().catch(() => {});
-  }
   return musicCtx;
 }
 
-function unlockMusicPlayback() {
+async function unlockMusicPlayback() {
   const ctx = ensureMusicContext();
-  if (!ctx) return;
+  if (!ctx) return false;
   if (ctx.state === 'suspended') {
-    ctx.resume().catch(() => {});
+    try { await ctx.resume(); } catch (_) {}
   }
-  isMusicUnlocked = true;
+  return ctx.state === 'running';
 }
 
 function playMusicNote(freq, duration, volume, type = 'sine') {
@@ -137,10 +134,10 @@ function stopBackgroundMusic() {
 
 function startBackgroundMusic(mode) {
   if (isMusicMuted) return;
-  if (!isMusicUnlocked) return;
+  const ctx = ensureMusicContext();
+  if (!ctx || ctx.state !== 'running') return;
   if (musicMode === mode && musicScheduler) return;
   stopBackgroundMusic();
-  if (!ensureMusicContext()) return;
   musicMode = mode;
   musicStep = 0;
   if (mode === 'soft') {
@@ -152,6 +149,20 @@ function startBackgroundMusic(mode) {
   }
 }
 
+async function tryStartMusic() {
+  if (isMusicMuted || !desiredMusicMode) {
+    stopBackgroundMusic();
+    return;
+  }
+  const ctx = ensureMusicContext();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    try { await ctx.resume(); } catch (_) {}
+  }
+  if (ctx.state !== 'running') return;
+  startBackgroundMusic(desiredMusicMode);
+}
+
 function updateBackgroundMusic() {
   const lobbyScreen = document.getElementById('lobby-screen');
   const gameScreen = document.getElementById('game-screen');
@@ -159,11 +170,13 @@ function updateBackgroundMusic() {
   const lobbyVisible = lobbyScreen && !lobbyScreen.classList.contains('hidden');
   const gameVisible = gameScreen && !gameScreen.classList.contains('hidden');
   if (!lobbyVisible || gameVisible) {
+    desiredMusicMode = null;
     stopBackgroundMusic();
     return;
   }
   const isSearching = searching && !searching.classList.contains('hidden');
-  startBackgroundMusic(isSearching ? 'thrill' : 'soft');
+  desiredMusicMode = isSearching ? 'thrill' : 'soft';
+  tryStartMusic();
 }
 
 function setMusicMuted(muted) {
@@ -176,9 +189,14 @@ function setMusicMuted(muted) {
   updateBackgroundMusic();
 }
 
-function toggleMusic() {
-  unlockMusicPlayback();
-  setMusicMuted(!isMusicMuted);
+async function toggleMusic() {
+  if (isMusicMuted) {
+    const unlocked = await unlockMusicPlayback();
+    setMusicMuted(false);
+    if (unlocked) tryStartMusic();
+  } else {
+    setMusicMuted(true);
+  }
 }
 
 // Music always defaults to ON on fresh page load.
@@ -220,16 +238,35 @@ function primeMoveSoundEngine() {
 }
 
 function setupAudioWarmup() {
-  const warmup = () => {
-    primeMoveSoundEngine();
-    unlockMusicPlayback();
-    updateBackgroundMusic();
-    if (moveSoundCtx && moveSoundCtx.state === 'suspended') {
-      moveSoundCtx.resume().catch(() => {});
+  let sfxWarmed = false;
+  let musicWarmed = false;
+
+  const warmup = async () => {
+    if (!sfxWarmed) {
+      sfxWarmed = true;
+      primeMoveSoundEngine();
+      if (moveSoundCtx && moveSoundCtx.state === 'suspended') {
+        moveSoundCtx.resume().catch(() => {});
+      }
+    }
+    if (!musicWarmed && !isMusicMuted) {
+      const unlocked = await unlockMusicPlayback();
+      if (unlocked) {
+        await tryStartMusic();
+        musicWarmed = true;
+      }
     }
   };
-  document.addEventListener('pointerdown', warmup, { once: true, passive: true });
-  document.addEventListener('keydown', warmup, { once: true });
+
+  ['pointerdown', 'touchstart', 'click', 'keydown'].forEach(evt => {
+    document.addEventListener(evt, warmup, { capture: true, passive: true });
+  });
+
+  // Desktop browsers that allow autoplay can start immediately.
+  window.addEventListener('load', () => { tryStartMusic(); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) tryStartMusic();
+  });
 }
 
 function playMoveSoundFallback() {
