@@ -36,6 +36,7 @@ let musicCtx = null;
 let musicScheduler = null;
 let musicMode = null; // 'soft' | 'thrill' | null
 let musicStep = 0;
+let isMusicUnlocked = false;
 
 function updateSoundButtons() {
   ['lobby-sound-toggle', 'game-sound-toggle'].forEach(id => {
@@ -77,6 +78,15 @@ function ensureMusicContext() {
     musicCtx.resume().catch(() => {});
   }
   return musicCtx;
+}
+
+function unlockMusicPlayback() {
+  const ctx = ensureMusicContext();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+  isMusicUnlocked = true;
 }
 
 function playMusicNote(freq, duration, volume, type = 'sine') {
@@ -127,6 +137,7 @@ function stopBackgroundMusic() {
 
 function startBackgroundMusic(mode) {
   if (isMusicMuted) return;
+  if (!isMusicUnlocked) return;
   if (musicMode === mode && musicScheduler) return;
   stopBackgroundMusic();
   if (!ensureMusicContext()) return;
@@ -166,6 +177,7 @@ function setMusicMuted(muted) {
 }
 
 function toggleMusic() {
+  unlockMusicPlayback();
   setMusicMuted(!isMusicMuted);
 }
 
@@ -207,6 +219,8 @@ function primeMoveSoundEngine() {
 function setupAudioWarmup() {
   const warmup = () => {
     primeMoveSoundEngine();
+    unlockMusicPlayback();
+    updateBackgroundMusic();
     if (moveSoundCtx && moveSoundCtx.state === 'suspended') {
       moveSoundCtx.resume().catch(() => {});
     }

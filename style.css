@@ -850,6 +850,23 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
     overflow: hidden;
   }
 
+  .sound-toggle,
+  .music-toggle,
+  .htp-trigger {
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    min-width: 104px;
+    text-align: center;
+    font-size: 0.6rem;
+    padding: 8px 10px;
+  }
+  .sound-toggle { left: 8px; }
+  .music-toggle { left: 50%; transform: translateX(-50%); }
+  .htp-trigger { right: 8px; }
+  .sound-toggle:hover,
+  .music-toggle:hover,
+  .htp-trigger:hover { transform: none; }
+  .music-toggle:hover { transform: translateX(-50%); }
+
   #game-screen {
     height: 100dvh;
     overflow: hidden;
@@ -947,7 +964,6 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
   /* Move HTP into the button row on mobile — hide the fixed one */
   .htp-trigger.in-game { display: none; }
   .sound-toggle.in-game { display: none; }
-  .music-toggle { bottom: 14px; left: 106px; font-size: 0.6rem; padding: 8px 14px; }
   .htp-mobile-btn { display: inline-flex; }
 }
 
