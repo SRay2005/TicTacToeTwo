@@ -342,8 +342,8 @@ const mySessionId   = Math.random().toString(36).slice(2);
 let myUsername = localStorage.getItem('ttt2_username') || '';
 // names[player] e.g. names['X'] = 'Alice'
 let names   = { X: '—', O: '—' };
-let myName  = '';   // my display name — never changes on seat swap
-let oppName = '';   // opponent display name — never changes on seat swap
+let myName  = '';   
+let oppName = '';   
 
 // ─── Guest Mode ──────────────────────────────────────────────────────────────
 let isGuest = false;
