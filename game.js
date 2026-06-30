@@ -1,20 +1,18 @@
 // ─── Firebase Config ──────────────────────────────────────────────────────────
 const firebaseConfig = {
-  apiKey:            "AIzaSyAJGS3EgK-lyMj_QNpyiOrw8hnxj_gtNSY",
-  authDomain:        "tictactoetwo-0501.firebaseapp.com",
-  databaseURL:       "https://tictactoetwo-0501-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId:         "tictactoetwo-0501",
-  storageBucket:     "tictactoetwo-0501.firebasestorage.app",
+  apiKey: "AIzaSyAJGS3EgK-lyMj_QNpyiOrw8hnxj_gtNSY",
+  authDomain: "tictactoetwo-0501.firebaseapp.com",
+  databaseURL: "https://tictactoetwo-0501-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "tictactoetwo-0501",
+  storageBucket: "tictactoetwo-0501.firebasestorage.app",
   messagingSenderId: "517254196835",
-  appId:             "1:517254196835:web:eaeb96ce02311855cc5256"
+  appId: "1:517254196835:web:eaeb96ce02311855cc5256"
 };
 
 firebase.initializeApp(firebaseConfig);
 
 // ─── App Check (reCAPTCHA v3) ─────────────────────────────────────────────────
-// REPLACE the string below with your reCAPTCHA v3 SITE KEY from:
-// https://www.google.com/recaptcha/admin
-// It looks like: 6Lc_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
 const appCheck = firebase.appCheck();
 appCheck.activate(
   '6LcKcJAsAAAAAP9YRIEkDqvKdns254wjUO45zUh9', // <── PASTE YOUR SITE KEY HERE
@@ -81,7 +79,7 @@ async function unlockMusicPlayback() {
   const ctx = ensureMusicContext();
   if (!ctx) return false;
   if (ctx.state === 'suspended') {
-    try { await ctx.resume(); } catch (_) {}
+    try { await ctx.resume(); } catch (_) { }
   }
   return ctx.state === 'running';
 }
@@ -157,7 +155,7 @@ async function tryStartMusic() {
   const ctx = ensureMusicContext();
   if (!ctx) return;
   if (ctx.state === 'suspended') {
-    try { await ctx.resume(); } catch (_) {}
+    try { await ctx.resume(); } catch (_) { }
   }
   if (ctx.state !== 'running') return;
   startBackgroundMusic(desiredMusicMode);
@@ -234,7 +232,7 @@ function primeMoveSoundEngine() {
       audio.currentTime = 0;
       audio.muted = prevMuted;
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function setupAudioWarmup() {
@@ -246,7 +244,7 @@ function setupAudioWarmup() {
       sfxWarmed = true;
       primeMoveSoundEngine();
       if (moveSoundCtx && moveSoundCtx.state === 'suspended') {
-        moveSoundCtx.resume().catch(() => {});
+        moveSoundCtx.resume().catch(() => { });
       }
     }
     if (!musicWarmed && !isMusicMuted) {
@@ -274,9 +272,9 @@ function playMoveSoundFallback() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
     if (!moveSoundCtx) moveSoundCtx = new Ctx();
-    const osc  = moveSoundCtx.createOscillator();
+    const osc = moveSoundCtx.createOscillator();
     const gain = moveSoundCtx.createGain();
-    const now  = moveSoundCtx.currentTime;
+    const now = moveSoundCtx.currentTime;
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(880, now);
     osc.frequency.exponentialRampToValueAtTime(660, now + 0.06);
@@ -287,7 +285,7 @@ function playMoveSoundFallback() {
     gain.connect(moveSoundCtx.destination);
     osc.start(now);
     osc.stop(now + 0.09);
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function playMoveSound() {
@@ -307,8 +305,8 @@ function playMoveSound() {
 }
 
 // ─── ELO / Rating ────────────────────────────────────────────────────────────
-const STARTING_RATING  = 1200;
-const ELO_K            = 32;
+const STARTING_RATING = 1200;
+const ELO_K = 32;
 const DRAW_DIFF_THRESH = 200;
 
 function calcEloDelta(myRating, oppRating, outcome) {
@@ -326,24 +324,24 @@ let gameMode = null;
 let isRanked = false;
 
 // ─── Online Session ───────────────────────────────────────────────────────────
-let myPlayer        = null;
-let roomId          = null;
-let roomRef         = null;
-let myQueueRef      = null;
-let gameListener    = null;
-let scoresListener  = null;
+let myPlayer = null;
+let roomId = null;
+let roomRef = null;
+let myQueueRef = null;
+let gameListener = null;
+let scoresListener = null;
 let playersListener = null;
-let readyListener   = null;
+let readyListener = null;
 let hasReceivedInitialGameState = false;
 let lastSyncedMoveCount = 0;
-const mySessionId   = Math.random().toString(36).slice(2);
+const mySessionId = Math.random().toString(36).slice(2);
 
 // ─── Username ────────────────────────────────────────────────────────────────
 let myUsername = localStorage.getItem('ttt2_username') || '';
 // names[player] e.g. names['X'] = 'Alice'
-let names   = { X: '—', O: '—' };
-let myName  = '';   
-let oppName = '';   
+let names = { X: '—', O: '—' };
+let myName = '';
+let oppName = '';
 
 // ─── Guest Mode ──────────────────────────────────────────────────────────────
 let isGuest = false;
@@ -351,10 +349,10 @@ let isGuest = false;
 let guestStats = { wins: 0, losses: 0, draws: 0, rating: STARTING_RATING };
 
 function generateGuestName() {
-  const adj  = ['Swift','Bold','Quiet','Brave','Sharp','Sly','Wild','Cool'];
-  const noun = ['Fox','Bear','Wolf','Hawk','Lion','Tiger','Panda','Eagle'];
-  const num  = Math.floor(Math.random() * 900) + 100;
-  return adj[Math.floor(Math.random()*adj.length)] + noun[Math.floor(Math.random()*noun.length)] + num;
+  const adj = ['Swift', 'Bold', 'Quiet', 'Brave', 'Sharp', 'Sly', 'Wild', 'Cool'];
+  const noun = ['Fox', 'Bear', 'Wolf', 'Hawk', 'Lion', 'Tiger', 'Panda', 'Eagle'];
+  const num = Math.floor(Math.random() * 900) + 100;
+  return adj[Math.floor(Math.random() * adj.length)] + noun[Math.floor(Math.random() * noun.length)] + num;
 }
 
 function playAsGuest() {
@@ -392,10 +390,10 @@ const myPlayerId = localStorage.getItem('ttt2_playerId') || (() => {
 
 async function hashPassword(password) {
   // App-level salt — defeats generic rainbow table attacks
-  const salted  = 'ttt2_s4lt_x9q::' + password + '::ttt2_end';
+  const salted = 'ttt2_s4lt_x9q::' + password + '::ttt2_end';
   const encoded = new TextEncoder().encode(salted);
-  const buf     = await crypto.subtle.digest('SHA-256', encoded);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  const buf = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 function nameKey(name) {
@@ -407,19 +405,19 @@ let pendingUsername = '';
 
 // ── Step 1: check if username exists ─────────────────────────────────────────
 async function checkUsername() {
-  const val   = document.getElementById('username-input').value.trim();
+  const val = document.getElementById('username-input').value.trim();
   const errEl = document.getElementById('username-error');
   errEl.textContent = '';
 
-  if (!val)          { errEl.textContent = 'Please enter a username.'; return; }
-  if (val.length < 2){ errEl.textContent = 'At least 2 characters please.'; return; }
+  if (!val) { errEl.textContent = 'Please enter a username.'; return; }
+  if (val.length < 2) { errEl.textContent = 'At least 2 characters please.'; return; }
 
   errEl.textContent = 'Checking...';
   const btn = document.querySelector('#lobby-username .lobby-btn.primary');
   btn.disabled = true;
 
   pendingUsername = val;
-  const key  = nameKey(val);
+  const key = nameKey(val);
   const snap = await db.ref('usernames/' + key).get();
   btn.disabled = false;
   errEl.textContent = '';
@@ -427,7 +425,7 @@ async function checkUsername() {
   if (!snap.exists()) {
     // Brand new username — ask them to set a password
     document.getElementById('auth-name-chip').textContent = val;
-    document.getElementById('set-password-input').value   = '';
+    document.getElementById('set-password-input').value = '';
     document.getElementById('set-password-confirm').value = '';
     document.getElementById('set-password-error').textContent = '';
     document.getElementById('lobby-username').classList.add('hidden');
@@ -441,8 +439,8 @@ async function checkUsername() {
   } else {
     // Taken by someone else — offer login
     document.getElementById('auth-login-chip').textContent = val;
-    document.getElementById('login-password-input').value  = '';
-    document.getElementById('login-error').textContent     = '';
+    document.getElementById('login-password-input').value = '';
+    document.getElementById('login-error').textContent = '';
     document.getElementById('lobby-username').classList.add('hidden');
     document.getElementById('lobby-login-password').classList.remove('hidden');
     document.getElementById('login-password-input').focus();
@@ -451,22 +449,22 @@ async function checkUsername() {
 
 // ── Step 2a: new user sets a password ────────────────────────────────────────
 async function submitSetPassword() {
-  const pw1   = document.getElementById('set-password-input').value;
-  const pw2   = document.getElementById('set-password-confirm').value;
+  const pw1 = document.getElementById('set-password-input').value;
+  const pw2 = document.getElementById('set-password-confirm').value;
   const errEl = document.getElementById('set-password-error');
   errEl.textContent = '';
 
-  if (!pw1)        { errEl.textContent = 'Please choose a password.'; return; }
+  if (!pw1) { errEl.textContent = 'Please choose a password.'; return; }
   if (pw1.length < 4) { errEl.textContent = 'Password must be at least 4 characters.'; return; }
   if (pw1 !== pw2) { errEl.textContent = 'Passwords do not match.'; return; }
 
-  const btn  = document.querySelector('#lobby-set-password .lobby-btn.primary');
+  const btn = document.querySelector('#lobby-set-password .lobby-btn.primary');
   btn.disabled = true;
   errEl.textContent = 'Creating account...';
 
   const hash = await hashPassword(pw1);
-  const key  = nameKey(pendingUsername);
-  const ref  = db.ref('usernames/' + key);
+  const key = nameKey(pendingUsername);
+  const ref = db.ref('usernames/' + key);
 
   // Transaction — ensure nobody else grabbed it while we were on this screen
   let taken = false;
@@ -488,7 +486,7 @@ async function submitSetPassword() {
 
 // ── Step 2b: existing user logs in with password ──────────────────────────────
 async function submitLogin() {
-  const pw    = document.getElementById('login-password-input').value;
+  const pw = document.getElementById('login-password-input').value;
   const errEl = document.getElementById('login-error');
   errEl.textContent = '';
 
@@ -498,7 +496,7 @@ async function submitLogin() {
   btn.disabled = true;
   errEl.textContent = 'Checking...';
 
-  const key  = nameKey(pendingUsername);
+  const key = nameKey(pendingUsername);
   const snap = await db.ref('usernames/' + key).get();
 
   if (!snap.exists()) {
@@ -509,7 +507,7 @@ async function submitLogin() {
     return;
   }
 
-  const hash      = await hashPassword(pw);
+  const hash = await hashPassword(pw);
   const storedHash = snap.val().passwordHash;
 
   if (hash !== storedHash) {
@@ -528,7 +526,7 @@ async function submitLogin() {
 async function finishLogin(name) {
   // Release old username if different (and it was a real username, not a guest)
   if (myUsername && myUsername !== name && !isGuest) {
-    const oldKey  = nameKey(myUsername);
+    const oldKey = nameKey(myUsername);
     const oldSnap = await db.ref('usernames/' + oldKey).get();
     if (oldSnap.exists() && oldSnap.val().playerId === myPlayerId) {
       await db.ref('usernames/' + oldKey).remove();
@@ -539,17 +537,17 @@ async function finishLogin(name) {
   if (isGuest && pendingGuestUpgrade && guestStats.wins + guestStats.losses + guestStats.draws > 0) {
     const existing = await loadProfile(myPlayerId);
     await db.ref('players/' + myPlayerId).update({
-      rating:   guestStats.rating,
-      wins:     (existing.wins   || 0) + guestStats.wins,
-      losses:   (existing.losses || 0) + guestStats.losses,
-      draws:    (existing.draws  || 0) + guestStats.draws,
+      rating: guestStats.rating,
+      wins: (existing.wins || 0) + guestStats.wins,
+      losses: (existing.losses || 0) + guestStats.losses,
+      draws: (existing.draws || 0) + guestStats.draws,
       username: name
     });
   }
 
-  isGuest             = false;
+  isGuest = false;
   pendingGuestUpgrade = false;
-  myUsername          = name;
+  myUsername = name;
   localStorage.setItem('ttt2_username', name);
   document.getElementById('lobby-guest-upgrade').classList.add('hidden');
   showLobbyMain(name);
@@ -564,20 +562,20 @@ async function claimUsername(name, newHash, existingHash) {
 }
 
 function backToUsername() {
-  ['lobby-set-password','lobby-login-password'].forEach(id =>
+  ['lobby-set-password', 'lobby-login-password'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
   document.getElementById('lobby-username').classList.remove('hidden');
   document.getElementById('username-error').textContent = '';
-  pendingUsername      = '';
-  pendingGuestUpgrade  = false; // don't transfer stats if user backed out
+  pendingUsername = '';
+  pendingGuestUpgrade = false; // don't transfer stats if user backed out
 }
 
 async function showLobbyMain(name) {
-  ['lobby-username','lobby-set-password','lobby-login-password',
-   'lobby-searching','lobby-waiting'].forEach(id =>
-    document.getElementById(id).classList.add('hidden'));
+  ['lobby-username', 'lobby-set-password', 'lobby-login-password',
+    'lobby-searching', 'lobby-waiting'].forEach(id =>
+      document.getElementById(id).classList.add('hidden'));
   document.getElementById('lobby-main').classList.remove('hidden');
-  ['cpu-picker','private-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+  ['cpu-picker', 'private-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
   updateBackgroundMusic();
 
   // Load rating and display alongside username
@@ -598,8 +596,8 @@ async function showLobbyMain(name) {
       });
     } else {
       const profile = await loadProfile(myPlayerId);
-      const rating  = profile.rating || STARTING_RATING;
-      el.innerHTML  = name + ' <span class="lobby-rating-badge">' + rating + ' pts</span>';
+      const rating = profile.rating || STARTING_RATING;
+      el.innerHTML = name + ' <span class="lobby-rating-badge">' + rating + ' pts</span>';
     }
   }
 }
@@ -614,7 +612,7 @@ function changeUsername() {
 
 async function initLobby() {
   if (myUsername) {
-    const key  = nameKey(myUsername);
+    const key = nameKey(myUsername);
     const snap = await db.ref('usernames/' + key).get();
     if (snap.exists() && snap.val().playerId === myPlayerId) {
       isGuest = false;
@@ -632,7 +630,7 @@ async function initLobby() {
 // ─── Player Profile & Rating ─────────────────────────────────────────────────
 async function loadProfile(playerId) {
   if (isGuest) return { ...guestStats, username: myUsername };
-  const ref  = db.ref('players/' + playerId);
+  const ref = db.ref('players/' + playerId);
   const snap = await ref.get();
   if (snap.exists()) return snap.val();
   const fresh = { rating: STARTING_RATING, wins: 0, losses: 0, draws: 0 };
@@ -642,31 +640,31 @@ async function loadProfile(playerId) {
 
 async function settleRating(roomData, winner) {
   if (!roomData || !roomData.ranked) return null;
-  const hostId  = roomData.hostId;
+  const hostId = roomData.hostId;
   const guestId = roomData.guestId;
   if (!hostId || !guestId) return null;
 
-  const hostSeat  = roomData.creatorPlayer || 'X';
+  const hostSeat = roomData.creatorPlayer || 'X';
   const guestSeat = hostSeat === 'X' ? 'O' : 'X';
 
-  const hostIsGuest  = roomData.hostPlayerIsGuest  === true || (myPlayerId === hostId  && isGuest);
+  const hostIsGuest = roomData.hostPlayerIsGuest === true || (myPlayerId === hostId && isGuest);
   const guestIsGuest = roomData.guestPlayerIsGuest === true || (myPlayerId === guestId && isGuest);
 
   // Use the ratings stored in the room at game start — these are always correct
   // even when one player is a guest (guest never writes to Firebase, so loadProfile
   // would return a stale 1200 for them)
-  const hostRatingStart  = roomData.hostRating  || STARTING_RATING;
+  const hostRatingStart = roomData.hostRating || STARTING_RATING;
   const guestRatingStart = roomData.guestRating || STARTING_RATING;
 
   // For win/loss/draw counts, fetch registered players' profiles (guests have in-memory stats)
-  const hostProf  = hostIsGuest  ? { wins:0, losses:0, draws:0 } : (await loadProfile(hostId));
-  const guestProf = guestIsGuest ? { wins:0, losses:0, draws:0 } : (await loadProfile(guestId));
+  const hostProf = hostIsGuest ? { wins: 0, losses: 0, draws: 0 } : (await loadProfile(hostId));
+  const guestProf = guestIsGuest ? { wins: 0, losses: 0, draws: 0 } : (await loadProfile(guestId));
 
-  const hostOutcome  = getOutcome(winner, hostSeat);
+  const hostOutcome = getOutcome(winner, hostSeat);
   const guestOutcome = getOutcome(winner, guestSeat);
-  const ratingDiff   = Math.abs(hostRatingStart - guestRatingStart);
-  let hostDelta  = calcEloDelta(hostRatingStart,  guestRatingStart, hostOutcome);
-  let guestDelta = calcEloDelta(guestRatingStart, hostRatingStart,  guestOutcome);
+  const ratingDiff = Math.abs(hostRatingStart - guestRatingStart);
+  let hostDelta = calcEloDelta(hostRatingStart, guestRatingStart, hostOutcome);
+  let guestDelta = calcEloDelta(guestRatingStart, hostRatingStart, guestOutcome);
   if (winner === 'D' && ratingDiff < DRAW_DIFF_THRESH) { hostDelta = 0; guestDelta = 0; }
 
   // Transaction: only ONE client writes to Firebase
@@ -680,17 +678,17 @@ async function settleRating(roomData, winner) {
 
   if (didSettle) {
     const hostUpdates = {
-      rating:   Math.max(0, hostRatingStart  + hostDelta),
-      wins:     (hostProf.wins   || 0) + (hostOutcome  === 1   ? 1 : 0),
-      losses:   (hostProf.losses || 0) + (hostOutcome  === 0   ? 1 : 0),
-      draws:    (hostProf.draws  || 0) + (hostOutcome  === 0.5 ? 1 : 0),
-      username: roomData.usernameHost  || ''
+      rating: Math.max(0, hostRatingStart + hostDelta),
+      wins: (hostProf.wins || 0) + (hostOutcome === 1 ? 1 : 0),
+      losses: (hostProf.losses || 0) + (hostOutcome === 0 ? 1 : 0),
+      draws: (hostProf.draws || 0) + (hostOutcome === 0.5 ? 1 : 0),
+      username: roomData.usernameHost || ''
     };
     const guestUpdates = {
-      rating:   Math.max(0, guestRatingStart + guestDelta),
-      wins:     (guestProf.wins   || 0) + (guestOutcome === 1   ? 1 : 0),
-      losses:   (guestProf.losses || 0) + (guestOutcome === 0   ? 1 : 0),
-      draws:    (guestProf.draws  || 0) + (guestOutcome === 0.5 ? 1 : 0),
+      rating: Math.max(0, guestRatingStart + guestDelta),
+      wins: (guestProf.wins || 0) + (guestOutcome === 1 ? 1 : 0),
+      losses: (guestProf.losses || 0) + (guestOutcome === 0 ? 1 : 0),
+      draws: (guestProf.draws || 0) + (guestOutcome === 0.5 ? 1 : 0),
       username: roomData.usernameGuest || ''
     };
 
@@ -705,27 +703,27 @@ async function settleRating(roomData, winner) {
 
     // Write to Firebase only for non-guest players
     const writes = [];
-    if (!hostIsGuest)  writes.push(db.ref('players/' + hostId).update(hostUpdates));
+    if (!hostIsGuest) writes.push(db.ref('players/' + hostId).update(hostUpdates));
     if (!guestIsGuest) writes.push(db.ref('players/' + guestId).update(guestUpdates));
     if (writes.length) await Promise.all(writes);
   }
 
   // Both players return their own delta regardless of who wrote
-  if (myPlayerId === hostId)  return hostDelta;
+  if (myPlayerId === hostId) return hostDelta;
   if (myPlayerId === guestId) return guestDelta;
   return null;
 }
 
 function showInstantDelta(winner) {
   if (!myPlayer || !isRanked) return;
-  const outcome    = winner === 'D' ? 0.5 : winner === myPlayer ? 1 : 0;
+  const outcome = winner === 'D' ? 0.5 : winner === myPlayer ? 1 : 0;
   const oppOutcome = 1 - outcome;
-  const drawFlat   = winner === 'D' && Math.abs(myGameRating - oppGameRating) < DRAW_DIFF_THRESH;
-  const myDelta    = drawFlat ? 0 : calcEloDelta(myGameRating, oppGameRating, outcome);
-  const oppDelta   = drawFlat ? 0 : calcEloDelta(oppGameRating, myGameRating, oppOutcome);
+  const drawFlat = winner === 'D' && Math.abs(myGameRating - oppGameRating) < DRAW_DIFF_THRESH;
+  const myDelta = drawFlat ? 0 : calcEloDelta(myGameRating, oppGameRating, outcome);
+  const oppDelta = drawFlat ? 0 : calcEloDelta(oppGameRating, myGameRating, oppOutcome);
   showRatingDelta(myDelta);
   // Update both cached ratings so rematch ELO is calculated from correct post-game values
-  myGameRating  = Math.max(0, myGameRating  + myDelta);
+  myGameRating = Math.max(0, myGameRating + myDelta);
   oppGameRating = Math.max(0, oppGameRating + oppDelta);
   // Keep guestStats in sync with myGameRating
   if (isGuest) {
@@ -737,7 +735,7 @@ function showInstantDelta(winner) {
 async function showRatingDelta(delta) {
   if (delta === null || delta === undefined) return;
   const el = document.getElementById('end-rating-delta');
-  el.classList.remove('hidden','gain','loss','none');
+  el.classList.remove('hidden', 'gain', 'loss', 'none');
   if (delta === 0) { el.textContent = 'Rating unchanged'; el.classList.add('none'); }
   else { el.textContent = (delta > 0 ? '+' : '') + delta + ' pts'; el.classList.add(delta > 0 ? 'gain' : 'loss'); }
 
@@ -745,9 +743,9 @@ async function showRatingDelta(delta) {
   refreshLobbyRating();
   if (myPlayer) {
     // myGameRating already updated by showInstantDelta before this is called
-    const myCard  = document.getElementById('pc-rating-' + myPlayer.toLowerCase());
+    const myCard = document.getElementById('pc-rating-' + myPlayer.toLowerCase());
     const oppCard = document.getElementById('pc-rating-' + (myPlayer === 'X' ? 'o' : 'x'));
-    if (myCard)  myCard.textContent  = myGameRating  + ' pts';
+    if (myCard) myCard.textContent = myGameRating + ' pts';
     if (oppCard) oppCard.textContent = oppGameRating + ' pts';
   }
 }
@@ -768,9 +766,9 @@ async function refreshLobbyRating() {
 }
 
 // ─── Leaderboard ──────────────────────────────────────────────────────────────
-function openLB()    { document.getElementById('lb-modal').classList.remove('hidden'); fetchLeaderboard(); }
-function closeLBBtn(){ document.getElementById('lb-modal').classList.add('hidden'); }
-function closeLB(e)  { if (e.target === document.getElementById('lb-modal')) closeLBBtn(); }
+function openLB() { document.getElementById('lb-modal').classList.remove('hidden'); fetchLeaderboard(); }
+function closeLBBtn() { document.getElementById('lb-modal').classList.add('hidden'); }
+function closeLB(e) { if (e.target === document.getElementById('lb-modal')) closeLBBtn(); }
 
 async function fetchLeaderboard() {
   const listEl = document.getElementById('lb-list');
@@ -789,17 +787,17 @@ async function fetchLeaderboard() {
   const top10 = rows.slice(0, 10);
   listEl.innerHTML = '';
   top10.forEach((p, i) => {
-    const rank    = i + 1;
-    const isMe    = p.id === myPlayerId;
-    const rankCls = rank===1?'top1':rank===2?'top2':rank===3?'top3':'';
-    const row     = document.createElement('div');
+    const rank = i + 1;
+    const isMe = p.id === myPlayerId;
+    const rankCls = rank === 1 ? 'top1' : rank === 2 ? 'top2' : rank === 3 ? 'top3' : '';
+    const row = document.createElement('div');
     row.className = 'lb-row' + (isMe ? ' me' : '');
     row.innerHTML =
       '<span class="lb-col-rank ' + rankCls + '">' + rank + '</span>' +
       '<span class="lb-col-name">' + (isMe ? '★ ' : '') + (p.username || 'Unknown') + '</span>' +
       '<span class="lb-col-rating">' + (p.rating || STARTING_RATING) + '</span>' +
-      '<span class="lb-col-record"><span class="w">' + (p.wins||0) + 'W</span> ' +
-      (p.draws||0) + 'D <span class="l">' + (p.losses||0) + 'L</span></span>';
+      '<span class="lb-col-record"><span class="w">' + (p.wins || 0) + 'W</span> ' +
+      (p.draws || 0) + 'D <span class="l">' + (p.losses || 0) + 'L</span></span>';
     listEl.appendChild(row);
   });
 }
@@ -809,7 +807,7 @@ async function fetchLeaderboard() {
 // countdown is identical on both devices regardless of network lag.
 const INACTIVITY_LIMIT = 120; // seconds
 let inactivityInterval = null;
-let moveStartedAt      = 0;   // ms — set from Firebase server timestamp
+let moveStartedAt = 0;   // ms — set from Firebase server timestamp
 
 function startInactivityTimer(serverTimestamp) {
   clearInactivityTimer();
@@ -818,21 +816,21 @@ function startInactivityTimer(serverTimestamp) {
   // Use the server timestamp if provided, otherwise fall back to now
   moveStartedAt = serverTimestamp || Date.now();
 
-  const bar   = document.getElementById('inactivity-bar');
-  const fill  = document.getElementById('inactivity-fill');
+  const bar = document.getElementById('inactivity-bar');
+  const fill = document.getElementById('inactivity-fill');
   const label = document.getElementById('inactivity-label');
-  const cd    = document.getElementById('inactivity-countdown');
+  const cd = document.getElementById('inactivity-countdown');
 
   bar.classList.remove('hidden');
 
   inactivityInterval = setInterval(async () => {
     // Calculate remaining time from the authoritative server timestamp
-    const elapsed  = (Date.now() - moveStartedAt) / 1000;
+    const elapsed = (Date.now() - moveStartedAt) / 1000;
     const secsLeft = Math.max(0, Math.round(INACTIVITY_LIMIT - elapsed));
-    const pct      = (secsLeft / INACTIVITY_LIMIT) * 100;
+    const pct = (secsLeft / INACTIVITY_LIMIT) * 100;
 
     fill.style.width = pct + '%';
-    cd.textContent   = secsLeft;
+    cd.textContent = secsLeft;
 
     const urgent = secsLeft <= 30;
     fill.classList.toggle('urgent', urgent);
@@ -856,20 +854,20 @@ function clearInactivityTimer() {
 }
 
 // ─── Game State ───────────────────────────────────────────────────────────────
-const WINS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+const WINS = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
 
 let currentPlayer = 'X';
-let lastMoveB     = -1; // board index of last move
-let lastMoveC     = -1; // cell index of last move
-let boards      = Array.from({ length: 9 }, () => Array(9).fill(null));
+let lastMoveB = -1; // board index of last move
+let lastMoveC = -1; // cell index of last move
+let boards = Array.from({ length: 9 }, () => Array(9).fill(null));
 let boardWinner = Array(9).fill(null);
 let outerWinner = null;
 let activeBoard = -1;
-let ratingShown   = false;
-let myGameRating  = STARTING_RATING;
+let ratingShown = false;
+let myGameRating = STARTING_RATING;
 let oppGameRating = STARTING_RATING;
-let scores      = { X: 0, O: 0 };
-let moveCount   = 0;
+let scores = { X: 0, O: 0 };
+let moveCount = 0;
 
 // ─── How To Play ──────────────────────────────────────────────────────────────
 function openHTP() {
@@ -887,12 +885,12 @@ function closeHTP(e) {
 
 // ─── Pass & Play ──────────────────────────────────────────────────────────────
 function startPassAndPlay() {
-  gameMode      = 'local';
-  myPlayer      = null;
+  gameMode = 'local';
+  myPlayer = null;
   cpuDifficulty = null;
-  cpuPlayer     = null;
-  cpuThinking   = false;
-  names         = { X: 'Player X', O: 'Player O' };
+  cpuPlayer = null;
+  cpuThinking = false;
+  names = { X: 'Player X', O: 'Player O' };
 
   document.getElementById('outer-win-svg').innerHTML = '';
   scores = { X: 0, O: 0 };
@@ -916,8 +914,8 @@ function startPassAndPlay() {
 
 // ─── CPU / AI ─────────────────────────────────────────────────────────────────
 let cpuDifficulty = null;
-let cpuPlayer     = null;
-let cpuThinking   = false;
+let cpuPlayer = null;
+let cpuThinking = false;
 
 let pendingCpuSide = 'X'; // default player side
 
@@ -957,11 +955,11 @@ function closePrivatePicker() {
 
 function startVsCPU(difficulty, playerSide) {
   cpuDifficulty = difficulty;
-  myPlayer  = playerSide || 'X';
+  myPlayer = playerSide || 'X';
   cpuPlayer = myPlayer === 'X' ? 'O' : 'X';
-  gameMode  = 'local';
-  isRanked  = false;
-  names     = { [myPlayer]: myUsername || 'You', [cpuPlayer]: 'CPU (' + difficulty + ')' };
+  gameMode = 'local';
+  isRanked = false;
+  names = { [myPlayer]: myUsername || 'You', [cpuPlayer]: 'CPU (' + difficulty + ')' };
   resetGameState();
   scores = { X: 0, O: 0 };
   document.getElementById('outer-win-svg').innerHTML = '';
@@ -1009,7 +1007,7 @@ function getCpuMove() {
     for (let c = 0; c < 9; c++)
       if (boards[b][c] === null) allMoves.push({ b, c });
   if (!allMoves.length) return null;
-  if (cpuDifficulty === 'easy')   return Math.random() < 0.8 ? randomMove(allMoves) : bestHeuristicMove(allMoves);
+  if (cpuDifficulty === 'easy') return Math.random() < 0.8 ? randomMove(allMoves) : bestHeuristicMove(allMoves);
   if (cpuDifficulty === 'medium') {
     const forced = forcedMove(allMoves);
     if (forced) return forced;
@@ -1020,14 +1018,14 @@ function getCpuMove() {
 
 function getValidBoards() {
   if (activeBoard !== -1 && boardWinner[activeBoard] === null) return [activeBoard];
-  return [0,1,2,3,4,5,6,7,8].filter(b => boardWinner[b] === null);
+  return [0, 1, 2, 3, 4, 5, 6, 7, 8].filter(b => boardWinner[b] === null);
 }
 function randomMove(moves) { return moves[Math.floor(Math.random() * moves.length)]; }
 
 function forcedMove(moves) {
   const opp = cpuPlayer === 'X' ? 'O' : 'X';
   for (const { b, c } of moves) if (wouldWinBoard(b, c, cpuPlayer)) return { b, c };
-  for (const { b, c } of moves) if (wouldWinBoard(b, c, opp))       return { b, c };
+  for (const { b, c } of moves) if (wouldWinBoard(b, c, opp)) return { b, c };
   return null;
 }
 function wouldWinBoard(b, c, player) {
@@ -1045,7 +1043,7 @@ function scoreMove(b, c) {
   let score = 0;
   const opp = cpuPlayer === 'X' ? 'O' : 'X';
   if (wouldWinBoard(b, c, cpuPlayer)) score += 100;
-  if (wouldWinBoard(b, c, opp))       score += 80;
+  if (wouldWinBoard(b, c, opp)) score += 80;
   score += outerBoardStrategicValue(b) * 3;
   score += cellPositionValue(c);
   const nb = c;
@@ -1074,7 +1072,7 @@ function outerBoardStrategicValue(b) { return WINS.filter(combo => combo.include
 function boardStrengthFor(b, player) { return boards[b].filter(v => v === player).length; }
 function outerProgressValue(b, player) {
   let value = 0;
-  const won = boardWinner.map((w,i) => w === player ? i : -1).filter(i => i >= 0);
+  const won = boardWinner.map((w, i) => w === player ? i : -1).filter(i => i >= 0);
   for (const combo of WINS) {
     if (!combo.includes(b)) continue;
     value += combo.filter(i => won.includes(i)).length;
@@ -1090,48 +1088,48 @@ function generateRoomId() {
 
 function resetGameState() {
   currentPlayer = 'X';
-  boards        = Array.from({ length: 9 }, () => Array(9).fill(null));
-  boardWinner   = Array(9).fill(null);
-  outerWinner   = null;
-  activeBoard   = -1;
-  moveCount     = 0;
-  ratingShown   = false;
-  lastMoveB     = -1;
-  lastMoveC     = -1;
+  boards = Array.from({ length: 9 }, () => Array(9).fill(null));
+  boardWinner = Array(9).fill(null);
+  outerWinner = null;
+  activeBoard = -1;
+  moveCount = 0;
+  ratingShown = false;
+  lastMoveB = -1;
+  lastMoveC = -1;
   hasReceivedInitialGameState = false;
   lastSyncedMoveCount = 0;
 }
 
 function initialGameState() {
   return {
-    boards:        Array.from({ length: 9 }, () => Array(9).fill(null)),
-    boardWinner:   Array(9).fill(null),
-    outerWinner:   null,
-    activeBoard:   -1,
+    boards: Array.from({ length: 9 }, () => Array(9).fill(null)),
+    boardWinner: Array(9).fill(null),
+    outerWinner: null,
+    activeBoard: -1,
     currentPlayer: 'X',
-    moveCount:     0
+    moveCount: 0
   };
 }
 
 function serializeGame(state) {
   return {
-    boards:        JSON.stringify(state.boards),
-    boardWinner:   JSON.stringify(state.boardWinner),
-    outerWinner:   state.outerWinner ?? '',
-    activeBoard:   state.activeBoard,
+    boards: JSON.stringify(state.boards),
+    boardWinner: JSON.stringify(state.boardWinner),
+    outerWinner: state.outerWinner ?? '',
+    activeBoard: state.activeBoard,
     currentPlayer: state.currentPlayer,
-    moveCount:     state.moveCount,
-    lastMoveB:     state.lastMoveB !== undefined ? state.lastMoveB : -1,
-    lastMoveC:     state.lastMoveC !== undefined ? state.lastMoveC : -1,
-    lastMoveAt:    firebase.database.ServerValue.TIMESTAMP
+    moveCount: state.moveCount,
+    lastMoveB: state.lastMoveB !== undefined ? state.lastMoveB : -1,
+    lastMoveC: state.lastMoveC !== undefined ? state.lastMoveC : -1,
+    lastMoveAt: firebase.database.ServerValue.TIMESTAMP
   };
 }
 
 function deserializeGame(data) {
-  boards        = JSON.parse(data.boards);
-  boardWinner   = JSON.parse(data.boardWinner);
-  outerWinner   = data.outerWinner || null;
-  activeBoard   = data.activeBoard;
+  boards = JSON.parse(data.boards);
+  boardWinner = JSON.parse(data.boardWinner);
+  outerWinner = data.outerWinner || null;
+  activeBoard = data.activeBoard;
   currentPlayer = data.currentPlayer;
   moveCount = data.moveCount;
   lastMoveB = (data.lastMoveB !== undefined) ? data.lastMoveB : -1;
@@ -1164,33 +1162,33 @@ async function quickMatch() {
   showLobbyPanel('lobby-searching');
 
   // Pre-create our own room in case we end up hosting
-  const myRoomId    = generateRoomId();
-  const hostPlayer  = Math.random() < 0.5 ? 'X' : 'O';
+  const myRoomId = generateRoomId();
+  const hostPlayer = Math.random() < 0.5 ? 'X' : 'O';
   const guestPlayer = hostPlayer === 'X' ? 'O' : 'X';
 
   const myRoomData = {
-    players:       { [hostPlayer]: true, [guestPlayer]: false },
+    players: { [hostPlayer]: true, [guestPlayer]: false },
     creatorPlayer: hostPlayer,
-    game:          serializeGame(initialGameState()),
-    scores:        { X: 0, O: 0 },
-    status:        'waiting',
-    mode:          'matchmaking',
-    createdAt:     Date.now()
+    game: serializeGame(initialGameState()),
+    scores: { X: 0, O: 0 },
+    status: 'waiting',
+    mode: 'matchmaking',
+    createdAt: Date.now()
   };
 
   // Write the room first so it exists before we advertise it
   const hostProfile = await loadProfile(myPlayerId);
   myRoomData.usernameHost = myUsername;
-  myRoomData.hostId       = myPlayerId;
-  myRoomData.hostRating   = hostProfile.rating;
-  myRoomData.ranked       = true;
+  myRoomData.hostId = myPlayerId;
+  myRoomData.hostRating = hostProfile.rating;
+  myRoomData.ranked = true;
   if (isGuest) myRoomData.hostPlayerIsGuest = true;
   await db.ref('rooms/' + myRoomId).set(myRoomData);
   db.ref('rooms/' + myRoomId).onDisconnect().remove();
 
   // Atomic transaction: grab someone else's room OR advertise ours
   const pendingRef = db.ref('matchmaking/pending');
-  let theirRoomId  = null;
+  let theirRoomId = null;
 
   await pendingRef.transaction(current => {
     if (current === null) {
@@ -1221,8 +1219,8 @@ async function quickMatch() {
     const data = snap.val();
     let joinerSeat = data.players.X === false ? 'X' : 'O';
 
-    roomId   = theirRoomId;
-    roomRef  = db.ref('rooms/' + roomId);
+    roomId = theirRoomId;
+    roomRef = db.ref('rooms/' + roomId);
     myPlayer = joinerSeat;
 
     // Write guest metadata BEFORE filling seat so host reads it in startOnlineGame
@@ -1239,8 +1237,8 @@ async function quickMatch() {
 
   } else {
     // ── We are the HOST ───────────────────────────────────────────────────
-    roomId   = myRoomId;
-    roomRef  = db.ref('rooms/' + roomId);
+    roomId = myRoomId;
+    roomRef = db.ref('rooms/' + roomId);
     myPlayer = hostPlayer;
     myQueueRef = pendingRef; // reuse myQueueRef so cancelMatchmaking cleans it up
 
@@ -1280,22 +1278,22 @@ async function createRoom() {
   setLobbyError('');
   gameMode = 'online';
   isRanked = false;
-  roomId   = generateRoomId();
-  roomRef  = db.ref(`rooms/${roomId}`);
+  roomId = generateRoomId();
+  roomRef = db.ref(`rooms/${roomId}`);
   // Randomly assign creator to X or O
   myPlayer = Math.random() < 0.5 ? 'X' : 'O';
   const joinerSeat = myPlayer === 'X' ? 'O' : 'X';
 
   await roomRef.set({
-    players:       { [myPlayer]: true, [joinerSeat]: false },
+    players: { [myPlayer]: true, [joinerSeat]: false },
     creatorPlayer: myPlayer,
-    game:          serializeGame(initialGameState()),
-    scores:        { X: 0, O: 0 },
-    status:        'waiting',
-    mode:          'private',
-    createdAt:     Date.now(),
-    usernameHost:  myUsername,
-    hostId:        myPlayerId
+    game: serializeGame(initialGameState()),
+    scores: { X: 0, O: 0 },
+    status: 'waiting',
+    mode: 'private',
+    createdAt: Date.now(),
+    usernameHost: myUsername,
+    hostId: myPlayerId
   });
 
   roomRef.onDisconnect().remove();
@@ -1325,14 +1323,14 @@ async function joinRoom() {
   const hasOpenSeat = rdata.players && (rdata.players.X === false || rdata.players.O === false);
   if (!hasOpenSeat) { setLobbyError('Room is full — game already in progress.'); return; }
 
-  gameMode  = 'online';
-  isRanked  = false;
+  gameMode = 'online';
+  isRanked = false;
 
   // Find the open seat and join it
   const joinerSeat = rdata.players.X === false ? 'X' : 'O';
 
-  roomId   = code;
-  roomRef  = db.ref('rooms/' + roomId);
+  roomId = code;
+  roomRef = db.ref('rooms/' + roomId);
   myPlayer = joinerSeat;
 
   // Write guest metadata BEFORE filling seat so host reads it in startOnlineGame
@@ -1357,10 +1355,10 @@ async function cancelRoom() {
 // ─── Leave ────────────────────────────────────────────────────────────────────
 async function leaveRoom() {
   // If leaving a ranked game mid-play, show forfeit delta first
-  const wasRanked  = isRanked;
-  const wasOnline  = gameMode === 'online';
-  const wasInGame  = !outerWinner;
-  const savedRoom  = roomRef;
+  const wasRanked = isRanked;
+  const wasOnline = gameMode === 'online';
+  const wasInGame = !outerWinner;
+  const savedRoom = roomRef;
   const savedPlayer = myPlayer;
 
   if (wasOnline && wasRanked && wasInGame && !ratingShown && savedRoom && savedPlayer) {
@@ -1373,15 +1371,15 @@ async function leaveRoom() {
     // Show a blocking screen: "You forfeited — [delta] — OK to go home"
     await new Promise(resolve => {
       const overlay = document.getElementById('end-overlay');
-      const icon    = document.getElementById('end-icon');
-      const title   = document.getElementById('end-title');
-      const sub     = document.getElementById('end-subtitle');
-      const newBtn  = document.getElementById('end-newgame-btn');
+      const icon = document.getElementById('end-icon');
+      const title = document.getElementById('end-title');
+      const sub = document.getElementById('end-subtitle');
+      const newBtn = document.getElementById('end-newgame-btn');
       const homeBtn = overlay.querySelector('.end-actions button:last-child');
-      icon.textContent  = '💀';
+      icon.textContent = '💀';
       title.textContent = 'You Forfeited';
       title.style.color = 'var(--x-color)';
-      sub.textContent   = 'You left the game early.';
+      sub.textContent = 'You left the game early.';
       newBtn.style.display = 'none';
       const origOnclick = homeBtn.onclick;
       homeBtn.textContent = 'OK → Home';
@@ -1398,8 +1396,8 @@ async function leaveRoom() {
   hideEndOverlay();
   clearInactivityTimer();
   setIngameNewGameVisible(true);
-  isRanked      = false;
-  ratingShown   = false;
+  isRanked = false;
+  ratingShown = false;
   const deltaEl = document.getElementById('end-rating-delta');
   if (deltaEl) deltaEl.classList.add('hidden');
   cpuDifficulty = null; cpuPlayer = null; cpuThinking = false;
@@ -1415,7 +1413,7 @@ async function leaveRoom() {
   }
 
   roomRef = null; roomId = null; myPlayer = null; gameMode = null;
-  scores  = { X: 0, O: 0 };
+  scores = { X: 0, O: 0 };
 
   document.getElementById('game-screen').classList.add('hidden');
   document.getElementById('room-info-bar').classList.add('hidden');
@@ -1424,15 +1422,15 @@ async function leaveRoom() {
   await showLobbyMain(myUsername);
   const jiEl = document.getElementById('join-input'); if (jiEl) jiEl.value = '';
   setLobbyError('');
-  ['cpu-picker','private-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+  ['cpu-picker', 'private-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
 }
 
 function detachListeners() {
   if (roomRef) {
-    if (gameListener)    roomRef.child('game').off('value', gameListener);
-    if (scoresListener)  roomRef.child('scores').off('value', scoresListener);
+    if (gameListener) roomRef.child('game').off('value', gameListener);
+    if (scoresListener) roomRef.child('scores').off('value', scoresListener);
     if (playersListener) roomRef.child('players').off('value', playersListener);
-    if (readyListener)   roomRef.child('ready').off('value', readyListener);
+    if (readyListener) roomRef.child('ready').off('value', readyListener);
   }
   gameListener = scoresListener = playersListener = readyListener = null;
 }
@@ -1448,22 +1446,22 @@ async function startOnlineGame() {
 
   // Fetch usernames from room
   const roomSnap = await roomRef.get();
-  const rdata    = roomSnap.val() || {};
+  const rdata = roomSnap.val() || {};
 
   // Always sync isRanked from the room data — single source of truth
   isRanked = rdata.ranked === true;
 
-  const hostUser  = rdata.usernameHost  || 'Unknown';
+  const hostUser = rdata.usernameHost || 'Unknown';
   const guestUser = rdata.usernameGuest || 'Unknown';
-  const hostSeat  = rdata.creatorPlayer || 'X';
+  const hostSeat = rdata.creatorPlayer || 'X';
   const guestSeat = hostSeat === 'X' ? 'O' : 'X';
 
   // Cache names permanently — these never change regardless of seat swaps
-  myName  = (myPlayer === hostSeat) ? hostUser  : guestUser;
+  myName = (myPlayer === hostSeat) ? hostUser : guestUser;
   oppName = (myPlayer === hostSeat) ? guestUser : hostUser;
 
-  names[myPlayer]                         = myName;
-  names[myPlayer === 'X' ? 'O' : 'X']    = oppName;
+  names[myPlayer] = myName;
+  names[myPlayer === 'X' ? 'O' : 'X'] = oppName;
 
   document.getElementById('pc-name-x').textContent = names.X;
   document.getElementById('pc-name-o').textContent = names.O;
@@ -1471,11 +1469,11 @@ async function startOnlineGame() {
   document.getElementById('score-x').textContent = scores.X || 0;
   document.getElementById('score-o').textContent = scores.O || 0;
   if (rdata.ranked) {
-    const hRat = rdata.hostRating  || STARTING_RATING;
+    const hRat = rdata.hostRating || STARTING_RATING;
     const gRat = rdata.guestRating || STARTING_RATING;
-    document.getElementById('pc-rating-' + hostSeat.toLowerCase()).textContent  = hRat + ' pts';
+    document.getElementById('pc-rating-' + hostSeat.toLowerCase()).textContent = hRat + ' pts';
     document.getElementById('pc-rating-' + guestSeat.toLowerCase()).textContent = gRat + ' pts';
-    myGameRating  = (myPlayer === hostSeat) ? hRat : gRat;
+    myGameRating = (myPlayer === hostSeat) ? hRat : gRat;
     oppGameRating = (myPlayer === hostSeat) ? gRat : hRat;
   } else {
     document.getElementById('pc-rating-x').textContent = 'Unranked';
@@ -1494,8 +1492,8 @@ async function startOnlineGame() {
       names[guestSeat] = gName;
       document.getElementById('pc-name-' + guestSeat.toLowerCase()).textContent = gName;
       // Also update cached myName/oppName so rematch names are correct
-      if (myPlayer === guestSeat) myName  = gName;
-      else                        oppName = gName;
+      if (myPlayer === guestSeat) myName = gName;
+      else oppName = gName;
     }
   });
   roomRef.child('guestRating').on('value', snap => {
@@ -1531,9 +1529,9 @@ async function startOnlineGame() {
       setIngameNewGameVisible(!isRanked);
       if (isRanked) {
         // Use cached myGameRating/oppGameRating — always current, no Firebase timing issues
-        const myCard  = document.getElementById('pc-rating-' + myPlayer.toLowerCase());
+        const myCard = document.getElementById('pc-rating-' + myPlayer.toLowerCase());
         const oppCard = document.getElementById('pc-rating-' + (myPlayer === 'X' ? 'o' : 'x'));
-        if (myCard)  myCard.textContent  = myGameRating  + ' pts';
+        if (myCard) myCard.textContent = myGameRating + ' pts';
         if (oppCard) oppCard.textContent = oppGameRating + ' pts';
       }
     }
@@ -1555,7 +1553,7 @@ async function startOnlineGame() {
 
   playersListener = roomRef.child('players').on('value', snap => {
     if (!snap.exists()) return;
-    const players  = snap.val();
+    const players = snap.val();
     const opponent = myPlayer === 'X' ? 'O' : 'X';
 
     if (players[opponent] === false && !outerWinner) {
@@ -1585,7 +1583,7 @@ async function startOnlineGame() {
       const btn = document.getElementById('end-newgame-btn');
       if (btn && btn.style.display !== 'none') {
         btn.textContent = '✕ Opponent went home';
-        btn.disabled    = true;
+        btn.disabled = true;
         btn.style.color = 'var(--muted)';
       }
       const notif = document.getElementById('rematch-notif');
@@ -1616,7 +1614,7 @@ async function startOnlineGame() {
   // Listen for ready / rematch state changes
   let oppWasReady = false; // track whether opponent ever set their ready flag
   readyListener = roomRef.child('ready').on('value', async snap => {
-    const ready    = snap.exists() ? snap.val() : {};
+    const ready = snap.exists() ? snap.val() : {};
     const opponent = myPlayer === 'X' ? 'O' : 'X';
 
     // Both players ready — swap seats and start new game
@@ -1628,7 +1626,7 @@ async function startOnlineGame() {
       myPlayer = myPlayer === 'X' ? 'O' : 'X';
 
       // Rebuild names dict (myName/oppName are pinned to players, not seats)
-      names[myPlayer]                      = myName;
+      names[myPlayer] = myName;
       names[myPlayer === 'X' ? 'O' : 'X'] = oppName;
       document.getElementById('pc-name-x').textContent = names.X;
       document.getElementById('pc-name-o').textContent = names.O;
@@ -1648,9 +1646,9 @@ async function startOnlineGame() {
 
       // Also update cached ratings to match new creatorPlayer
       // hSeat = newCreator, so host's rating now belongs to newCreator card
-      const hProf = await loadProfile(rsData.hostId  || myPlayerId);
+      const hProf = await loadProfile(rsData.hostId || myPlayerId);
       const gProf = await loadProfile(rsData.guestId || myPlayerId);
-      myGameRating  = amHost ? hProf.rating : gProf.rating;
+      myGameRating = amHost ? hProf.rating : gProf.rating;
       oppGameRating = amHost ? gProf.rating : hProf.rating;
 
       await roomRef.child('ready').remove();
@@ -1673,7 +1671,7 @@ async function startOnlineGame() {
       const btn = document.getElementById('end-newgame-btn');
       if (btn) {
         btn.textContent = '✕ Opponent went home';
-        btn.disabled    = true;
+        btn.disabled = true;
         btn.style.color = 'var(--muted)';
       }
       const notif = document.getElementById('rematch-notif');
@@ -1694,32 +1692,32 @@ async function startOnlineGame() {
 
 // ─── Build DOM ────────────────────────────────────────────────────────────────
 function buildGrid() {
-  const svg       = document.getElementById('outer-win-svg');
+  const svg = document.getElementById('outer-win-svg');
   const outerGrid = document.getElementById('outer-grid');
   outerGrid.innerHTML = '';
   outerGrid.appendChild(svg);
 
   for (let b = 0; b < 9; b++) {
-    const board    = document.createElement('div');
+    const board = document.createElement('div');
     board.className = 'inner-board';
-    board.id        = `board-${b}`;
+    board.id = `board-${b}`;
 
-    const cellGrid    = document.createElement('div');
+    const cellGrid = document.createElement('div');
     cellGrid.className = 'cell-grid';
 
     for (let c = 0; c < 9; c++) {
-      const cell    = document.createElement('div');
+      const cell = document.createElement('div');
       cell.className = 'cell';
-      cell.id        = `cell-${b}-${c}`;
-      cell.onclick   = () => handleClick(b, c);
+      cell.id = `cell-${b}-${c}`;
+      cell.onclick = () => handleClick(b, c);
       cellGrid.appendChild(cell);
     }
 
-    const overlay    = document.createElement('div');
+    const overlay = document.createElement('div');
     overlay.className = 'board-overlay';
-    const sym        = document.createElement('div');
-    sym.className     = 'board-overlay-symbol';
-    sym.id            = `overlay-sym-${b}`;
+    const sym = document.createElement('div');
+    sym.className = 'board-overlay-symbol';
+    sym.id = `overlay-sym-${b}`;
     overlay.appendChild(sym);
 
     board.appendChild(cellGrid);
@@ -1737,25 +1735,25 @@ function render() {
     const finished = boardWinner[b] !== null;
 
     if (finished) {
-      if      (boardWinner[b] === 'X') boardEl.classList.add('won-x');
+      if (boardWinner[b] === 'X') boardEl.classList.add('won-x');
       else if (boardWinner[b] === 'O') boardEl.classList.add('won-o');
-      else                             boardEl.classList.add('drawn');
+      else boardEl.classList.add('drawn');
     } else if (!outerWinner) {
       if (activeBoard === -1 || activeBoard === b)
         boardEl.classList.add(activeBoard === -1 ? 'any-valid' : 'active-board');
     }
 
     const overlaySym = document.getElementById(`overlay-sym-${b}`);
-    if      (boardWinner[b] === 'X') { overlaySym.textContent = 'X';    overlaySym.className = 'board-overlay-symbol x'; }
-    else if (boardWinner[b] === 'O') { overlaySym.textContent = 'O';    overlaySym.className = 'board-overlay-symbol o'; }
+    if (boardWinner[b] === 'X') { overlaySym.textContent = 'X'; overlaySym.className = 'board-overlay-symbol x'; }
+    else if (boardWinner[b] === 'O') { overlaySym.textContent = 'O'; overlaySym.className = 'board-overlay-symbol o'; }
     else if (boardWinner[b] === 'D') { overlaySym.textContent = 'DRAW'; overlaySym.className = 'board-overlay-symbol draw'; }
-    else                              { overlaySym.textContent = '';     overlaySym.className = 'board-overlay-symbol'; }
+    else { overlaySym.textContent = ''; overlaySym.className = 'board-overlay-symbol'; }
 
     const winningCells = finished && boardWinner[b] !== 'D' ? getWinningCells(boards[b]) : [];
 
     for (let c = 0; c < 9; c++) {
       const cellEl = document.getElementById(`cell-${b}-${c}`);
-      const val    = boards[b][c];
+      const val = boards[b][c];
       cellEl.className = 'cell';
       if (val) {
         cellEl.classList.add('taken', val === 'X' ? 'x-cell' : 'o-cell');
@@ -1791,11 +1789,11 @@ function render() {
 
 function showEndOverlay(result, subtitle = '') {
   // result: 'win' | 'loss' | 'draw' | 'oppleft'
-  const overlay  = document.getElementById('end-overlay');
-  const icon     = document.getElementById('end-icon');
-  const title    = document.getElementById('end-title');
-  const sub      = document.getElementById('end-subtitle');
-  const newBtn   = document.getElementById('end-newgame-btn');
+  const overlay = document.getElementById('end-overlay');
+  const icon = document.getElementById('end-icon');
+  const title = document.getElementById('end-title');
+  const sub = document.getElementById('end-subtitle');
+  const newBtn = document.getElementById('end-newgame-btn');
 
   // Hide New Game button for online games when opponent left
   // (no point replaying alone)
@@ -1807,30 +1805,30 @@ function showEndOverlay(result, subtitle = '') {
   }
 
   if (result === 'pnp-win') {
-    icon.textContent  = '🏆';
+    icon.textContent = '🏆';
     title.textContent = subtitle.split(' ')[0] + ' Wins!';
     title.style.color = 'var(--active-glow)';
-    sub.textContent   = '';
+    sub.textContent = '';
   } else if (result === 'win') {
-    icon.textContent  = '🏆';
+    icon.textContent = '🏆';
     title.textContent = 'You Win!';
     title.style.color = 'var(--active-glow)';
-    sub.textContent   = subtitle || 'Well played!';
+    sub.textContent = subtitle || 'Well played!';
   } else if (result === 'loss') {
-    icon.textContent  = '💀';
+    icon.textContent = '💀';
     title.textContent = 'You Lose';
     title.style.color = 'var(--x-color)';
-    sub.textContent   = subtitle || 'Better luck next time.';
+    sub.textContent = subtitle || 'Better luck next time.';
   } else if (result === 'draw') {
-    icon.textContent  = '🤝';
+    icon.textContent = '🤝';
     title.textContent = 'Draw!';
     title.style.color = 'var(--muted)';
-    sub.textContent   = subtitle || 'Evenly matched.';
+    sub.textContent = subtitle || 'Evenly matched.';
   } else if (result === 'oppleft') {
-    icon.textContent  = '🏆';
+    icon.textContent = '🏆';
     title.textContent = 'You Win!';
     title.style.color = 'var(--active-glow)';
-    sub.textContent   = 'Opponent left the game.';
+    sub.textContent = 'Opponent left the game.';
   }
 
   overlay.classList.remove('hidden');
@@ -1854,8 +1852,8 @@ function setIngameNewGameVisible(visible) {
 }
 
 function renderStatus() {
-  const el    = document.getElementById('status-content');
-  const bar   = el.closest('.status-bar');
+  const el = document.getElementById('status-content');
+  const bar = el.closest('.status-bar');
   const where = activeBoard === -1 ? 'any board' : `board ${activeBoard + 1}`;
 
   if (outerWinner === 'D') {
@@ -1927,9 +1925,9 @@ function renderStatus() {
 
 // ─── Handle Click ─────────────────────────────────────────────────────────────
 async function handleClick(b, c) {
-  if (outerWinner)                             return;
-  if (boardWinner[b] !== null)                 return;
-  if (boards[b][c] !== null)                   return;
+  if (outerWinner) return;
+  if (boardWinner[b] !== null) return;
+  if (boards[b][c] !== null) return;
   if (activeBoard !== -1 && activeBoard !== b) return;
 
   // Online: only let the current player click
@@ -1985,12 +1983,12 @@ function applyMove(b, c) {
   } else if (boardWinner.every(w => w !== null)) {
     const xCount = boardWinner.filter(w => w === 'X').length;
     const oCount = boardWinner.filter(w => w === 'O').length;
-    outerWinner  = xCount > oCount ? 'X' : oCount > xCount ? 'O' : 'D';
+    outerWinner = xCount > oCount ? 'X' : oCount > xCount ? 'O' : 'D';
     if (gameMode === 'online' && outerWinner !== 'D') scores[outerWinner]++;
   }
 
   if (!outerWinner) {
-    activeBoard   = boardWinner[c] !== null ? -1 : c;
+    activeBoard = boardWinner[c] !== null ? -1 : c;
     currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
   }
 }
@@ -2018,8 +2016,8 @@ async function restartGame() {
   if (!roomRef) return;
 
   const btn = document.getElementById('end-newgame-btn');
-  btn.textContent  = '⏳ Waiting for opponent...';
-  btn.disabled     = true;
+  btn.textContent = '⏳ Waiting for opponent...';
+  btn.disabled = true;
 
   await roomRef.child('ready/' + myPlayer).set(true);
   // The readyListener in startOnlineGame handles the actual reset
@@ -2040,9 +2038,9 @@ function getWinningCells(cells) {
 }
 
 function drawOuterWinLine(winner) {
-  const svg     = document.getElementById('outer-win-svg');
+  const svg = document.getElementById('outer-win-svg');
   svg.innerHTML = '';
-  const wl      = getWinLineCoords(boardWinner.map(w => w === 'D' ? null : w));
+  const wl = getWinLineCoords(boardWinner.map(w => w === 'D' ? null : w));
   if (!wl) return;
   const [r1, c1, r2, c2] = wl;
   const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
