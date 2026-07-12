@@ -801,10 +801,28 @@ async function initLobby() {
 async function loadProfile(playerId) {
   if (isGuest) return { ...guestStats, username: myUsername };
   const ref = db.ref('players/' + playerId);
-  const snap = await ref.once('value');
-  if (snap.exists()) return snap.val();
+  try {
+    const snap = await ref.once('value');
+    if (snap.exists()) {
+      const profile = snap.val() || {};
+      return {
+        rating: profile.rating || STARTING_RATING,
+        wins: profile.wins || 0,
+        losses: profile.losses || 0,
+        draws: profile.draws || 0,
+        username: profile.username || myUsername || ''
+      };
+    }
+  } catch (err) {
+    console.warn('Could not load profile from Firebase, using fallback values', err);
+  }
+
   const fresh = { rating: STARTING_RATING, wins: 0, losses: 0, draws: 0 };
-  await ref.set(fresh);
+  try {
+    await ref.set(fresh);
+  } catch (err) {
+    console.warn('Could not create fallback profile in Firebase', err);
+  }
   return fresh;
 }
 
