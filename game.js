@@ -726,6 +726,27 @@ async function finishLogin(name) {
   myUsername = safeName;
   localStorage.setItem('ttt2_username', safeName);
   document.getElementById('lobby-guest-upgrade').classList.add('hidden');
+
+  // Reconcile profile: if the current player node has no rating yet,
+  // try to migrate any existing profile that belongs to this username.
+  try {
+    const playerSnap = await db.ref('players/' + myPlayerId).once('value');
+    const hasRating = playerSnap.exists() && (playerSnap.val().rating !== undefined && playerSnap.val().rating !== null);
+    if (!hasRating) {
+      const unameKey = nameKey(safeName);
+      const unameSnap = await db.ref('usernames/' + unameKey).once('value');
+      if (unameSnap.exists()) {
+        const rec = unameSnap.val();
+        const prevId = rec.playerId || null;
+        if (prevId && prevId !== myPlayerId) {
+          await transferProfileToCurrentUser(prevId, myPlayerId, safeName);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Profile reconciliation failed', err);
+  }
+
   showLobbyMain(safeName);
 }
 
