@@ -602,7 +602,14 @@ async function submitSetPassword() {
   btn.disabled = true;
   errEl.textContent = 'Creating account...';
 
-  await ensureAuthReady();
+  try {
+    await ensureAuthReady();
+  } catch (err) {
+    btn.disabled = false;
+    errEl.textContent = 'Unable to create account right now. Please try again.';
+    console.error('Auth readiness failed during account creation', err);
+    return;
+  }
   pendingUsername = normalizeDisplayName(pendingUsername);
   const hash = await hashPassword(pw1);
   const key = nameKey(pendingUsername);
