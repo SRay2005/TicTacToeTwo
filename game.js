@@ -415,8 +415,12 @@ async function hashPassword(password) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function normalizeDisplayName(name) {
+  return String(name || '').trim();
+}
+
 function nameKey(name) {
-  return name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  return normalizeDisplayName(name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
 }
 
 function getLocalAccounts() {
@@ -545,17 +549,17 @@ async function checkUsername() {
   const btn = document.querySelector('#lobby-username .lobby-btn.primary');
   btn.disabled = true;
 
-  pendingUsername = val;
+  pendingUsername = normalizeDisplayName(val);
   await ensureAuthReady();
 
   try {
-    const record = await readUsernameRecord(val);
+    const record = await readUsernameRecord(pendingUsername);
     btn.disabled = false;
     errEl.textContent = '';
 
     if (!record.exists) {
       // Brand new username — ask them to set a password
-      document.getElementById('auth-name-chip').textContent = val;
+      document.getElementById('auth-name-chip').textContent = pendingUsername;
       document.getElementById('set-password-input').value = '';
       document.getElementById('set-password-confirm').value = '';
       document.getElementById('set-password-error').textContent = '';
@@ -565,11 +569,11 @@ async function checkUsername() {
 
     } else if (record.value.playerId === myPlayerId) {
       // Same device — auto-login (no password needed)
-      await claimUsername(val, null, record.value.passwordHash);
+      await claimUsername(pendingUsername, null, record.value.passwordHash);
 
     } else {
       // Taken by someone else — offer login
-      document.getElementById('auth-login-chip').textContent = val;
+      document.getElementById('auth-login-chip').textContent = pendingUsername;
       document.getElementById('login-password-input').value = '';
       document.getElementById('login-error').textContent = '';
       document.getElementById('lobby-username').classList.add('hidden');
@@ -599,6 +603,7 @@ async function submitSetPassword() {
   errEl.textContent = 'Creating account...';
 
   await ensureAuthReady();
+  pendingUsername = normalizeDisplayName(pendingUsername);
   const hash = await hashPassword(pw1);
   const key = nameKey(pendingUsername);
   const ref = db.ref('usernames/' + key);
@@ -661,18 +666,20 @@ async function submitLogin() {
       return;
     }
 
+    const canonicalName = normalizeDisplayName(record.value.display || pendingUsername);
+
     if (record.source === 'firebase') {
       try {
-        const key = nameKey(pendingUsername);
-        await db.ref('usernames/' + key).update({ playerId: myPlayerId });
+        const key = nameKey(canonicalName);
+        await db.ref('usernames/' + key).update({ playerId: myPlayerId, display: canonicalName });
       } catch (firebaseErr) {
         console.warn('Firebase ownership update failed, continuing with local fallback', firebaseErr);
       }
     }
 
-    setLocalAccount(pendingUsername, { playerId: myPlayerId, display: pendingUsername, passwordHash: storedHash });
+    setLocalAccount(canonicalName, { playerId: myPlayerId, display: canonicalName, passwordHash: storedHash });
     btn.disabled = false;
-    await finishLogin(pendingUsername);
+    await finishLogin(canonicalName);
   } catch (err) {
     btn.disabled = false;
     errEl.textContent = 'Unable to log in right now. Please try again.';
@@ -682,8 +689,10 @@ async function submitLogin() {
 
 // ── Finish: save locally, release old username, go to lobby ──────────────────
 async function finishLogin(name) {
+  const safeName = normalizeDisplayName(name);
+
   // Release old username if different (and it was a real username, not a guest)
-  if (myUsername && myUsername !== name && !isGuest) {
+  if (myUsername && myUsername !== safeName && !isGuest) {
     const oldKey = nameKey(myUsername);
     try {
       const oldSnap = await db.ref('usernames/' + oldKey).once('value');
@@ -704,16 +713,16 @@ async function finishLogin(name) {
       wins: (existing.wins || 0) + guestStats.wins,
       losses: (existing.losses || 0) + guestStats.losses,
       draws: (existing.draws || 0) + guestStats.draws,
-      username: name
+      username: safeName
     });
   }
 
   isGuest = false;
   pendingGuestUpgrade = false;
-  myUsername = name;
-  localStorage.setItem('ttt2_username', name);
+  myUsername = safeName;
+  localStorage.setItem('ttt2_username', safeName);
   document.getElementById('lobby-guest-upgrade').classList.add('hidden');
-  showLobbyMain(name);
+  showLobbyMain(safeName);
 }
 
 async function claimUsername(name, newHash, existingHash) {
@@ -810,7 +819,7 @@ async function loadProfile(playerId) {
         wins: profile.wins || 0,
         losses: profile.losses || 0,
         draws: profile.draws || 0,
-        username: profile.username || myUsername || ''
+        username: normalizeDisplayName(myUsername || profile.username || profile.display || '')
       };
     }
   } catch (err) {
@@ -962,13 +971,23 @@ async function fetchLeaderboard() {
   const listEl = document.getElementById('lb-list');
   listEl.innerHTML = '<div class="lb-loading">Loading...</div>';
   // Fetch all players without ordering (avoids needing a Firebase index)
-  const snap = await db.ref('players').once('value');
-  if (!snap.exists()) { listEl.innerHTML = '<div class="lb-loading">No players yet.</div>'; return; }
+  const [playersSnap, usernamesSnap] = await Promise.all([
+    db.ref('players').once('value'),
+    db.ref('usernames').once('value')
+  ]);
+  if (!playersSnap.exists()) { listEl.innerHTML = '<div class="lb-loading">No players yet.</div>'; return; }
+
+  const displayNames = {};
+  usernamesSnap.forEach(child => {
+    const data = child.val() || {};
+    if (data.playerId) displayNames[data.playerId] = normalizeDisplayName(data.display || data.username || '');
+  });
+
   const rows = [];
-  snap.forEach(child => {
+  playersSnap.forEach(child => {
     const val = child.val();
     // Only show players who have played at least one rated game
-    if (val.wins || val.losses || val.draws) rows.push({ id: child.key, ...val });
+    if (val.wins || val.losses || val.draws) rows.push({ id: child.key, ...val, displayName: displayNames[child.key] || normalizeDisplayName(val.username || '') });
   });
   if (rows.length === 0) { listEl.innerHTML = '<div class="lb-loading">No rated games played yet.</div>'; return; }
   rows.sort((a, b) => (b.rating || 0) - (a.rating || 0));
@@ -982,7 +1001,7 @@ async function fetchLeaderboard() {
     row.className = 'lb-row' + (isMe ? ' me' : '');
     row.innerHTML =
       '<span class="lb-col-rank ' + rankCls + '">' + rank + '</span>' +
-      '<span class="lb-col-name">' + (isMe ? '★ ' : '') + (p.username || 'Unknown') + '</span>' +
+      '<span class="lb-col-name">' + (isMe ? '★ ' : '') + (p.displayName || p.username || 'Unknown') + '</span>' +
       '<span class="lb-col-rating">' + (p.rating || STARTING_RATING) + '</span>' +
       '<span class="lb-col-record"><span class="w">' + (p.wins || 0) + 'W</span> ' +
       (p.draws || 0) + 'D <span class="l">' + (p.losses || 0) + 'L</span></span>';
