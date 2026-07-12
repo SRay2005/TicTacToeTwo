@@ -419,6 +419,60 @@ function nameKey(name) {
   return name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
 }
 
+function getLocalAccounts() {
+  try {
+    const raw = localStorage.getItem('ttt2_local_accounts');
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveLocalAccounts(accounts) {
+  localStorage.setItem('ttt2_local_accounts', JSON.stringify(accounts));
+}
+
+function getLocalAccount(name) {
+  const accounts = getLocalAccounts();
+  const key = nameKey(name);
+  return accounts[key] || null;
+}
+
+function setLocalAccount(name, account) {
+  const accounts = getLocalAccounts();
+  const key = nameKey(name);
+  accounts[key] = { ...account, display: name };
+  saveLocalAccounts(accounts);
+}
+
+function removeLocalAccount(name) {
+  const accounts = getLocalAccounts();
+  const key = nameKey(name);
+  if (accounts[key]) {
+    delete accounts[key];
+    saveLocalAccounts(accounts);
+  }
+}
+
+async function readUsernameRecord(name) {
+  const key = nameKey(name);
+  try {
+    const snap = await readDbValueWithTimeout('usernames/' + key);
+    if (snap.exists()) {
+      return { exists: true, value: snap.val(), source: 'firebase' };
+    }
+  } catch (err) {
+    console.warn('Firebase username lookup failed, using local fallback', err);
+  }
+
+  const localAccount = getLocalAccount(name);
+  if (localAccount) {
+    return { exists: true, value: localAccount, source: 'local' };
+  }
+
+  return { exists: false, value: null, source: 'local' };
+}
+
 // Pending state across the two-step auth flow
 let pendingUsername = '';
 
@@ -493,14 +547,13 @@ async function checkUsername() {
 
   pendingUsername = val;
   await ensureAuthReady();
-  const key = nameKey(val);
 
   try {
-    const snap = await readDbValueWithTimeout('usernames/' + key);
+    const record = await readUsernameRecord(val);
     btn.disabled = false;
     errEl.textContent = '';
 
-    if (!snap.exists()) {
+    if (!record.exists) {
       // Brand new username — ask them to set a password
       document.getElementById('auth-name-chip').textContent = val;
       document.getElementById('set-password-input').value = '';
@@ -510,9 +563,9 @@ async function checkUsername() {
       document.getElementById('lobby-set-password').classList.remove('hidden');
       document.getElementById('set-password-input').focus();
 
-    } else if (snap.val().playerId === myPlayerId) {
+    } else if (record.value.playerId === myPlayerId) {
       // Same device — auto-login (no password needed)
-      await claimUsername(val, null, snap.val().passwordHash);
+      await claimUsername(val, null, record.value.passwordHash);
 
     } else {
       // Taken by someone else — offer login
@@ -549,22 +602,29 @@ async function submitSetPassword() {
   const hash = await hashPassword(pw1);
   const key = nameKey(pendingUsername);
   const ref = db.ref('usernames/' + key);
+  const accountData = { playerId: myPlayerId, display: pendingUsername, passwordHash: hash };
 
-  // Transaction — ensure nobody else grabbed it while we were on this screen
-  let taken = false;
-  await ref.transaction(current => {
-    if (current !== null) { taken = true; return; }
-    return { playerId: myPlayerId, display: pendingUsername, passwordHash: hash };
-  });
+  try {
+    // Transaction — ensure nobody else grabbed it while we were on this screen
+    let taken = false;
+    await ref.transaction(current => {
+      if (current !== null) { taken = true; return; }
+      return accountData;
+    });
 
-  btn.disabled = false;
+    btn.disabled = false;
 
-  if (taken) {
-    errEl.textContent = 'That username was just taken. Try another.';
-    setTimeout(backToUsername, 1500);
-    return;
+    if (taken) {
+      errEl.textContent = 'That username was just taken. Try another.';
+      setTimeout(backToUsername, 1500);
+      return;
+    }
+  } catch (firebaseErr) {
+    console.warn('Firebase account creation failed, using local fallback', firebaseErr);
   }
 
+  setLocalAccount(pendingUsername, accountData);
+  btn.disabled = false;
   await finishLogin(pendingUsername);
 }
 
@@ -582,10 +642,9 @@ async function submitLogin() {
 
   try {
     await ensureAuthReady();
-    const key = nameKey(pendingUsername);
-    const snap = await readDbValueWithTimeout('usernames/' + key);
+    const record = await readUsernameRecord(pendingUsername);
 
-    if (!snap.exists()) {
+    if (!record.exists) {
       // Username vanished — just claim it fresh
       btn.disabled = false;
       errEl.textContent = '';
@@ -594,7 +653,7 @@ async function submitLogin() {
     }
 
     const hash = await hashPassword(pw);
-    const storedHash = snap.val().passwordHash;
+    const storedHash = record.value.passwordHash;
 
     if (hash !== storedHash) {
       btn.disabled = false;
@@ -602,8 +661,16 @@ async function submitLogin() {
       return;
     }
 
-    // Password correct — transfer ownership to this device
-    await db.ref('usernames/' + key).update({ playerId: myPlayerId });
+    if (record.source === 'firebase') {
+      try {
+        const key = nameKey(pendingUsername);
+        await db.ref('usernames/' + key).update({ playerId: myPlayerId });
+      } catch (firebaseErr) {
+        console.warn('Firebase ownership update failed, continuing with local fallback', firebaseErr);
+      }
+    }
+
+    setLocalAccount(pendingUsername, { playerId: myPlayerId, display: pendingUsername, passwordHash: storedHash });
     btn.disabled = false;
     await finishLogin(pendingUsername);
   } catch (err) {
@@ -618,10 +685,15 @@ async function finishLogin(name) {
   // Release old username if different (and it was a real username, not a guest)
   if (myUsername && myUsername !== name && !isGuest) {
     const oldKey = nameKey(myUsername);
-    const oldSnap = await db.ref('usernames/' + oldKey).once('value');
-    if (oldSnap.exists() && oldSnap.val().playerId === myPlayerId) {
-      await db.ref('usernames/' + oldKey).remove();
+    try {
+      const oldSnap = await db.ref('usernames/' + oldKey).once('value');
+      if (oldSnap.exists() && oldSnap.val().playerId === myPlayerId) {
+        await db.ref('usernames/' + oldKey).remove();
+      }
+    } catch (err) {
+      console.warn('Could not remove old username from Firebase, keeping local fallback', err);
     }
+    removeLocalAccount(myUsername);
   }
 
   // If upgrading from guest, write guest stats to the new profile
@@ -647,7 +719,14 @@ async function finishLogin(name) {
 async function claimUsername(name, newHash, existingHash) {
   const key = nameKey(name);
   if (newHash) {
-    await db.ref('usernames/' + key).set({ playerId: myPlayerId, display: name, passwordHash: newHash });
+    try {
+      await db.ref('usernames/' + key).set({ playerId: myPlayerId, display: name, passwordHash: newHash });
+    } catch (err) {
+      console.warn('Firebase username claim failed, using local fallback', err);
+    }
+  }
+  if (newHash) {
+    setLocalAccount(name, { playerId: myPlayerId, display: name, passwordHash: newHash });
   }
   await finishLogin(name);
 }
