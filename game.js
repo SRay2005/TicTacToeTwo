@@ -12,12 +12,20 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 
 // ─── App Check (reCAPTCHA v3) ─────────────────────────────────────────────────
-
-const appCheck = firebase.appCheck();
-appCheck.activate(
-  '6LcKcJAsAAAAAP9YRIEkDqvKdns254wjUO45zUh9',
-  true // auto-refresh tokens
-);
+// Keep App Check enabled. For local development, enable the debug-token path so
+// requests are still accepted while preserving the protection in production.
+try {
+  const appCheck = firebase.appCheck();
+  const isLocalDev = ['localhost', '127.0.0.1', ''].includes(window.location.hostname) || window.location.protocol === 'file:';
+  if (isLocalDev) {
+    window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
+  if (appCheck && typeof appCheck.activate === 'function') {
+    appCheck.activate('6LcKcJAsAAAAAP9YRIEkDqvKdns254wjUO45zUh9', true);
+  }
+} catch (err) {
+  console.warn('App Check setup failed', err);
+}
 
 const db = firebase.database();
 
