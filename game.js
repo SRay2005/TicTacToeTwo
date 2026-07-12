@@ -382,11 +382,22 @@ function upgradeGuest() {
 let pendingGuestUpgrade = false;
 
 // ─── Auth helpers ────────────────────────────────────────────────────────────
-const myPlayerId = localStorage.getItem('ttt2_playerId') || (() => {
-  const id = 'uid_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-  localStorage.setItem('ttt2_playerId', id);
-  return id;
-})();
+let myPlayerId = null;
+const auth = firebase.auth();
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err => {
+  console.warn('Auth persistence failed', err);
+});
+
+auth.onAuthStateChanged(user => {
+  if (user) {
+    myPlayerId = user.uid;
+    if (typeof initLobby === 'function') initLobby();
+  } else {
+    auth.signInAnonymously().catch(err => {
+      console.error('Anonymous sign-in failed', err);
+    });
+  }
+});
 
 async function hashPassword(password) {
   // App-level salt — defeats generic rainbow table attacks
@@ -2063,7 +2074,7 @@ function getWinLineCoords(cells) {
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
-initLobby();
+// initLobby is invoked once auth state is available.
 updateSoundButtons();
 updateMusicButton();
 updateBackgroundMusic();
