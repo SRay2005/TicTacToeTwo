@@ -15,7 +15,7 @@ firebase.initializeApp(firebaseConfig);
 
 const appCheck = firebase.appCheck();
 appCheck.activate(
-  '6LcKcJAsAAAAAP9YRIEkDqvKdns254wjUO45zUh9', // <── PASTE YOUR SITE KEY HERE
+  '6LcKcJAsAAAAAP9YRIEkDqvKdns254wjUO45zUh9',
   true // auto-refresh tokens
 );
 
