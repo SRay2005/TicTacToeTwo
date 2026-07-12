@@ -414,6 +414,22 @@ function nameKey(name) {
 // Pending state across the two-step auth flow
 let pendingUsername = '';
 
+async function readDbValueWithTimeout(path, timeoutMs = 8000) {
+  const ref = db.ref(path);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Database request timed out')), timeoutMs);
+    ref.get()
+      .then(snapshot => {
+        clearTimeout(timer);
+        resolve(snapshot);
+      })
+      .catch(err => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 // ── Step 1: check if username exists ─────────────────────────────────────────
 async function checkUsername() {
   const val = document.getElementById('username-input').value.trim();
@@ -429,32 +445,39 @@ async function checkUsername() {
 
   pendingUsername = val;
   const key = nameKey(val);
-  const snap = await db.ref('usernames/' + key).get();
-  btn.disabled = false;
-  errEl.textContent = '';
 
-  if (!snap.exists()) {
-    // Brand new username — ask them to set a password
-    document.getElementById('auth-name-chip').textContent = val;
-    document.getElementById('set-password-input').value = '';
-    document.getElementById('set-password-confirm').value = '';
-    document.getElementById('set-password-error').textContent = '';
-    document.getElementById('lobby-username').classList.add('hidden');
-    document.getElementById('lobby-set-password').classList.remove('hidden');
-    document.getElementById('set-password-input').focus();
+  try {
+    const snap = await readDbValueWithTimeout('usernames/' + key);
+    btn.disabled = false;
+    errEl.textContent = '';
 
-  } else if (snap.val().playerId === myPlayerId) {
-    // Same device — auto-login (no password needed)
-    await claimUsername(val, null, snap.val().passwordHash);
+    if (!snap.exists()) {
+      // Brand new username — ask them to set a password
+      document.getElementById('auth-name-chip').textContent = val;
+      document.getElementById('set-password-input').value = '';
+      document.getElementById('set-password-confirm').value = '';
+      document.getElementById('set-password-error').textContent = '';
+      document.getElementById('lobby-username').classList.add('hidden');
+      document.getElementById('lobby-set-password').classList.remove('hidden');
+      document.getElementById('set-password-input').focus();
 
-  } else {
-    // Taken by someone else — offer login
-    document.getElementById('auth-login-chip').textContent = val;
-    document.getElementById('login-password-input').value = '';
-    document.getElementById('login-error').textContent = '';
-    document.getElementById('lobby-username').classList.add('hidden');
-    document.getElementById('lobby-login-password').classList.remove('hidden');
-    document.getElementById('login-password-input').focus();
+    } else if (snap.val().playerId === myPlayerId) {
+      // Same device — auto-login (no password needed)
+      await claimUsername(val, null, snap.val().passwordHash);
+
+    } else {
+      // Taken by someone else — offer login
+      document.getElementById('auth-login-chip').textContent = val;
+      document.getElementById('login-password-input').value = '';
+      document.getElementById('login-error').textContent = '';
+      document.getElementById('lobby-username').classList.add('hidden');
+      document.getElementById('lobby-login-password').classList.remove('hidden');
+      document.getElementById('login-password-input').focus();
+    }
+  } catch (err) {
+    btn.disabled = false;
+    errEl.textContent = 'Unable to reach the server. Please try again.';
+    console.error('Username lookup failed', err);
   }
 }
 
@@ -507,30 +530,36 @@ async function submitLogin() {
   btn.disabled = true;
   errEl.textContent = 'Checking...';
 
-  const key = nameKey(pendingUsername);
-  const snap = await db.ref('usernames/' + key).get();
+  try {
+    const key = nameKey(pendingUsername);
+    const snap = await readDbValueWithTimeout('usernames/' + key);
 
-  if (!snap.exists()) {
-    // Username vanished — just claim it fresh
+    if (!snap.exists()) {
+      // Username vanished — just claim it fresh
+      btn.disabled = false;
+      errEl.textContent = '';
+      await checkUsername();
+      return;
+    }
+
+    const hash = await hashPassword(pw);
+    const storedHash = snap.val().passwordHash;
+
+    if (hash !== storedHash) {
+      btn.disabled = false;
+      errEl.textContent = 'Incorrect password. Try again.';
+      return;
+    }
+
+    // Password correct — transfer ownership to this device
+    await db.ref('usernames/' + key).update({ playerId: myPlayerId });
     btn.disabled = false;
-    errEl.textContent = '';
-    await checkUsername();
-    return;
-  }
-
-  const hash = await hashPassword(pw);
-  const storedHash = snap.val().passwordHash;
-
-  if (hash !== storedHash) {
+    await finishLogin(pendingUsername);
+  } catch (err) {
     btn.disabled = false;
-    errEl.textContent = 'Incorrect password. Try again.';
-    return;
+    errEl.textContent = 'Unable to log in right now. Please try again.';
+    console.error('Login failed', err);
   }
-
-  // Password correct — transfer ownership to this device
-  await db.ref('usernames/' + key).update({ playerId: myPlayerId });
-  btn.disabled = false;
-  await finishLogin(pendingUsername);
 }
 
 // ── Finish: save locally, release old username, go to lobby ──────────────────
