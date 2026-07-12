@@ -458,7 +458,7 @@ async function readDbValueWithTimeout(path, timeoutMs = 8000) {
   const ref = db.ref(path);
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Database request timed out')), timeoutMs);
-    ref.get()
+    ref.once('value')
       .then(snapshot => {
         clearTimeout(timer);
         resolve(snapshot);
@@ -610,7 +610,7 @@ async function finishLogin(name) {
   // Release old username if different (and it was a real username, not a guest)
   if (myUsername && myUsername !== name && !isGuest) {
     const oldKey = nameKey(myUsername);
-    const oldSnap = await db.ref('usernames/' + oldKey).get();
+    const oldSnap = await db.ref('usernames/' + oldKey).once('value');
     if (oldSnap.exists() && oldSnap.val().playerId === myPlayerId) {
       await db.ref('usernames/' + oldKey).remove();
     }
@@ -696,7 +696,7 @@ function changeUsername() {
 async function initLobby() {
   if (myUsername) {
     const key = nameKey(myUsername);
-    const snap = await db.ref('usernames/' + key).get();
+    const snap = await db.ref('usernames/' + key).once('value');
     if (snap.exists() && snap.val().playerId === myPlayerId) {
       isGuest = false;
       showLobbyMain(myUsername);
@@ -714,7 +714,7 @@ async function initLobby() {
 async function loadProfile(playerId) {
   if (isGuest) return { ...guestStats, username: myUsername };
   const ref = db.ref('players/' + playerId);
-  const snap = await ref.get();
+  const snap = await ref.once('value');
   if (snap.exists()) return snap.val();
   const fresh = { rating: STARTING_RATING, wins: 0, losses: 0, draws: 0 };
   await ref.set(fresh);
@@ -857,7 +857,7 @@ async function fetchLeaderboard() {
   const listEl = document.getElementById('lb-list');
   listEl.innerHTML = '<div class="lb-loading">Loading...</div>';
   // Fetch all players without ordering (avoids needing a Firebase index)
-  const snap = await db.ref('players').get();
+  const snap = await db.ref('players').once('value');
   if (!snap.exists()) { listEl.innerHTML = '<div class="lb-loading">No players yet.</div>'; return; }
   const rows = [];
   snap.forEach(child => {
@@ -1291,7 +1291,7 @@ async function quickMatch() {
     await db.ref('rooms/' + myRoomId).remove();
 
     // Join the host's room
-    const snap = await db.ref('rooms/' + theirRoomId).get();
+    const snap = await db.ref('rooms/' + theirRoomId).once('value');
     if (!snap.exists() || snap.val().status !== 'waiting') {
       // Host's room is gone — clear pending and try again fresh
       await pendingRef.remove();
@@ -1398,7 +1398,7 @@ async function joinRoom() {
 
   if (code.length !== 6) { setLobbyError('Please enter a 6-character room code.'); return; }
 
-  const snap = await db.ref(`rooms/${code}`).get();
+  const snap = await db.ref(`rooms/${code}`).once('value');
 
   if (!snap.exists()) { setLobbyError('Room not found. Check the code and try again.'); return; }
   const rdata = snap.val();
@@ -1528,7 +1528,7 @@ async function startOnlineGame() {
   document.getElementById('room-info-label').textContent = 'Room: ' + roomId;
 
   // Fetch usernames from room
-  const roomSnap = await roomRef.get();
+  const roomSnap = await roomRef.once('value');
   const rdata = roomSnap.val() || {};
 
   // Always sync isRanked from the room data — single source of truth
@@ -1645,13 +1645,13 @@ async function startOnlineGame() {
       oppLeftTimer = setTimeout(async () => {
         oppLeftTimer = null;
         // Re-check: did they come back?
-        const reSnap = await roomRef.child('players/' + opponent).get();
+        const reSnap = await roomRef.child('players/' + opponent).once('value');
         if (reSnap.val() === false && !outerWinner) {
           clearInactivityTimer();
           outerWinner = myPlayer;
           setIngameNewGameVisible(true);
           showEndOverlay('oppleft');
-          if (isRanked && !ratingShown) { ratingShown = true; showInstantDelta(myPlayer); roomRef.get().then(s => settleRating(s.val(), myPlayer)); }
+          if (isRanked && !ratingShown) { ratingShown = true; showInstantDelta(myPlayer); roomRef.once('value').then(s => settleRating(s.val(), myPlayer)); }
         }
       }, 8000);
     } else if (players[opponent] === true && oppLeftTimer) {
@@ -1690,7 +1690,7 @@ async function startOnlineGame() {
       } else {
         showEndOverlay('loss', isQuit ? 'You left the game.' : 'You ran out of time.');
       }
-      if (isRanked && !ratingShown) { ratingShown = true; showInstantDelta(outerWinner); roomRef.get().then(s => settleRating(s.val(), outerWinner)); }
+      if (isRanked && !ratingShown) { ratingShown = true; showInstantDelta(outerWinner); roomRef.once('value').then(s => settleRating(s.val(), outerWinner)); }
     }
   });
 
@@ -1716,7 +1716,7 @@ async function startOnlineGame() {
 
       // Read current room to find new creatorPlayer value, then update it.
       // This ensures the game listener reads the correct hSeat when refreshing ratings.
-      const rsSnap = await roomRef.get();
+      const rsSnap = await roomRef.once('value');
       const rsData = rsSnap.val() || {};
       const curCreator = rsData.creatorPlayer || 'X';
       const newCreator = curCreator === 'X' ? 'O' : 'X';
@@ -1943,7 +1943,7 @@ function renderStatus() {
     el.innerHTML = `<span class="win-banner" style="color:#888">DRAW</span>`;
     setIngameNewGameVisible(true);
     showEndOverlay('draw');
-    if (gameMode === 'online' && isRanked && !ratingShown) { ratingShown = true; showInstantDelta('D'); roomRef.get().then(s => settleRating(s.val(), 'D')); }
+    if (gameMode === 'online' && isRanked && !ratingShown) { ratingShown = true; showInstantDelta('D'); roomRef.once('value').then(s => settleRating(s.val(), 'D')); }
     return;
   }
 
@@ -1964,7 +1964,7 @@ function renderStatus() {
       el.innerHTML = `<span class="win-banner" style="color:${col}">${youWon ? 'YOU WIN!' : 'OPPONENT WINS!'}</span>`;
       setIngameNewGameVisible(true);
       showEndOverlay(youWon ? 'win' : 'loss');
-      if (isRanked && !ratingShown) { ratingShown = true; showInstantDelta(outerWinner); roomRef.get().then(s => settleRating(s.val(), outerWinner)); }
+      if (isRanked && !ratingShown) { ratingShown = true; showInstantDelta(outerWinner); roomRef.once('value').then(s => settleRating(s.val(), outerWinner)); }
     }
     return;
   }
