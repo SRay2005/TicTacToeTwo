@@ -414,6 +414,46 @@ function nameKey(name) {
 // Pending state across the two-step auth flow
 let pendingUsername = '';
 
+async function ensureAuthReady(timeoutMs = 8000) {
+  if (myPlayerId) return myPlayerId;
+  if (auth.currentUser && auth.currentUser.uid) {
+    myPlayerId = auth.currentUser.uid;
+    return myPlayerId;
+  }
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('Authentication timed out'));
+    }, timeoutMs);
+
+    const finish = (uid) => {
+      clearTimeout(timer);
+      if (uid) {
+        myPlayerId = uid;
+        resolve(uid);
+      } else {
+        reject(new Error('No authenticated user available'));
+      }
+    };
+
+    auth.onAuthStateChanged(user => {
+      if (user && user.uid) {
+        finish(user.uid);
+        return;
+      }
+      auth.signInAnonymously().then(result => {
+        finish(result?.user?.uid || null);
+      }).catch(err => {
+        finish(null);
+        console.error('Anonymous sign-in failed', err);
+      });
+    }, err => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
 async function readDbValueWithTimeout(path, timeoutMs = 8000) {
   const ref = db.ref(path);
   return new Promise((resolve, reject) => {
@@ -444,6 +484,7 @@ async function checkUsername() {
   btn.disabled = true;
 
   pendingUsername = val;
+  await ensureAuthReady();
   const key = nameKey(val);
 
   try {
@@ -496,6 +537,7 @@ async function submitSetPassword() {
   btn.disabled = true;
   errEl.textContent = 'Creating account...';
 
+  await ensureAuthReady();
   const hash = await hashPassword(pw1);
   const key = nameKey(pendingUsername);
   const ref = db.ref('usernames/' + key);
@@ -531,6 +573,7 @@ async function submitLogin() {
   errEl.textContent = 'Checking...';
 
   try {
+    await ensureAuthReady();
     const key = nameKey(pendingUsername);
     const snap = await readDbValueWithTimeout('usernames/' + key);
 
