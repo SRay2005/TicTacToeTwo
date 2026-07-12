@@ -1433,6 +1433,15 @@ async function quickMatch() {
   isRanked = true;
   showLobbyPanel('lobby-searching');
 
+  try {
+    await ensureAuthReady();
+  } catch (err) {
+    console.error('quickMatch: auth not ready', err);
+    setLobbyError('Unable to join matchmaking right now.');
+    showLobbyPanel('lobby-main');
+    return;
+  }
+
   // Pre-create our own room in case we end up hosting
   const myRoomId = generateRoomId();
   const hostPlayer = Math.random() < 0.5 ? 'X' : 'O';
@@ -1462,7 +1471,10 @@ async function quickMatch() {
   const pendingRef = db.ref('matchmaking/pending');
   let theirRoomId = null;
 
-  await pendingRef.transaction(current => {
+  // Use the transaction result to detect whether we committed (advertised)
+  // or took an existing pending slot. If the transaction didn't commit
+  // (concurrent write), retry once to avoid silently failing to match.
+  const txRes = await pendingRef.transaction(current => {
     if (current === null) {
       // Nobody waiting — advertise our room
       return { roomId: myRoomId, sessionId: mySessionId, ts: Date.now() };
@@ -1472,6 +1484,18 @@ async function quickMatch() {
       return null;
     }
   });
+
+  console.debug('matchmaking transaction result:', txRes && txRes.committed, 'theirRoomId=', theirRoomId, 'pending=', txRes && txRes.snapshot && txRes.snapshot.val());
+
+  if (txRes && txRes.committed === false) {
+    // A concurrent write happened; try one more time to avoid leaving both clients
+    // thinking they advertised but neither succeeded.
+    const retryRes = await pendingRef.transaction(current => {
+      if (current === null) return { roomId: myRoomId, sessionId: mySessionId, ts: Date.now() };
+      theirRoomId = current.roomId; return null;
+    });
+    console.debug('matchmaking retry result:', retryRes && retryRes.committed, 'theirRoomId=', theirRoomId, 'pending=', retryRes && retryRes.snapshot && retryRes.snapshot.val());
+  }
 
   if (theirRoomId) {
     // ── We are the GUEST ──────────────────────────────────────────────────
@@ -1513,6 +1537,12 @@ async function quickMatch() {
     roomRef = db.ref('rooms/' + roomId);
     myPlayer = hostPlayer;
     myQueueRef = pendingRef; // reuse myQueueRef so cancelMatchmaking cleans it up
+    try {
+      // ensure pending slot is removed if we disconnect
+      myQueueRef.onDisconnect().remove();
+    } catch (err) {
+      console.warn('Could not register onDisconnect for matchmaking/pending', err);
+    }
 
     // Watch for the guest to join our room
     roomRef.child('players/' + guestPlayer).on('value', snap => {
