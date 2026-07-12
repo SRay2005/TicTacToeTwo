@@ -667,6 +667,10 @@ async function submitLogin() {
     }
 
     const canonicalName = normalizeDisplayName(record.value.display || pendingUsername);
+    const previousPlayerId = record.value.playerId || null;
+    if (previousPlayerId && previousPlayerId !== myPlayerId) {
+      await transferProfileToCurrentUser(previousPlayerId, myPlayerId, canonicalName);
+    }
 
     if (record.source === 'firebase') {
       try {
@@ -807,6 +811,39 @@ async function initLobby() {
 }
 
 // ─── Player Profile & Rating ─────────────────────────────────────────────────
+async function transferProfileToCurrentUser(oldPlayerId, newPlayerId, displayName) {
+  if (!oldPlayerId || !newPlayerId || oldPlayerId === newPlayerId) return null;
+  try {
+    const [oldSnap, newSnap] = await Promise.all([
+      db.ref('players/' + oldPlayerId).once('value'),
+      db.ref('players/' + newPlayerId).once('value')
+    ]);
+
+    if (!oldSnap.exists()) return null;
+    const oldProfile = oldSnap.val() || {};
+    const newProfile = newSnap.exists() ? (newSnap.val() || {}) : {};
+    const isDefaultNewProfile = !newProfile.rating && !newProfile.wins && !newProfile.losses && !newProfile.draws;
+
+    if (!isDefaultNewProfile && newProfile.rating !== undefined && (newProfile.wins || newProfile.losses || newProfile.draws)) {
+      return null;
+    }
+
+    const migrated = {
+      rating: oldProfile.rating || STARTING_RATING,
+      wins: oldProfile.wins || 0,
+      losses: oldProfile.losses || 0,
+      draws: oldProfile.draws || 0,
+      username: normalizeDisplayName(displayName || oldProfile.username || '')
+    };
+
+    await db.ref('players/' + newPlayerId).set(migrated);
+    return migrated;
+  } catch (err) {
+    console.warn('Could not migrate profile to current player ID', err);
+    return null;
+  }
+}
+
 async function loadProfile(playerId) {
   if (isGuest) return { ...guestStats, username: myUsername };
   const ref = db.ref('players/' + playerId);
