@@ -865,6 +865,14 @@ async function transferProfileToCurrentUser(oldPlayerId, newPlayerId, displayNam
     };
 
     await db.ref('players/' + newPlayerId).set(migrated);
+    // Remove the old stale profile node if it is no longer referenced by the username.
+    if (oldSnap.exists() && oldPlayerId !== newPlayerId) {
+      const oldUsernameKey = nameKey(displayName || oldProfile.username || '');
+      const oldUsernameRec = await db.ref('usernames/' + oldUsernameKey).once('value');
+      if (!oldUsernameRec.exists() || oldUsernameRec.val().playerId !== oldPlayerId) {
+        await db.ref('players/' + oldPlayerId).remove();
+      }
+    }
     return migrated;
   } catch (err) {
     console.warn('Could not migrate profile to current player ID', err);
@@ -1055,8 +1063,26 @@ async function fetchLeaderboard() {
     if (val.wins || val.losses || val.draws) rows.push({ id: child.key, ...val, displayName: displayNames[child.key] || normalizeDisplayName(val.username || '') });
   });
   if (rows.length === 0) { listEl.innerHTML = '<div class="lb-loading">No rated games played yet.</div>'; return; }
-  rows.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-  const top10 = rows.slice(0, 10);
+
+  // Deduplicate accidental duplicate display names caused by stale profiles.
+  const deduped = new Map();
+  rows.forEach(row => {
+    const key = (row.displayName || row.username || row.id || '').toLowerCase();
+    if (!deduped.has(key)) {
+      deduped.set(key, { ...row, isMe: row.id === myPlayerId });
+      return;
+    }
+    const existing = deduped.get(key);
+    existing.wins = (existing.wins || 0) + (row.wins || 0);
+    existing.losses = (existing.losses || 0) + (row.losses || 0);
+    existing.draws = (existing.draws || 0) + (row.draws || 0);
+    existing.rating = Math.max(existing.rating || 0, row.rating || 0);
+    existing.isMe = existing.isMe || row.id === myPlayerId;
+  });
+
+  const dedupedRows = Array.from(deduped.values());
+  dedupedRows.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  const top10 = dedupedRows.slice(0, 10);
   listEl.innerHTML = '';
   top10.forEach((p, i) => {
     const rank = i + 1;
