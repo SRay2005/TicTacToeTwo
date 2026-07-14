@@ -423,58 +423,13 @@ function nameKey(name) {
   return normalizeDisplayName(name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
 }
 
-function getLocalAccounts() {
-  try {
-    const raw = localStorage.getItem('ttt2_local_accounts');
-    return raw ? JSON.parse(raw) : {};
-  } catch (_) {
-    return {};
-  }
-}
-
-function saveLocalAccounts(accounts) {
-  localStorage.setItem('ttt2_local_accounts', JSON.stringify(accounts));
-}
-
-function getLocalAccount(name) {
-  const accounts = getLocalAccounts();
-  const key = nameKey(name);
-  return accounts[key] || null;
-}
-
-function setLocalAccount(name, account) {
-  const accounts = getLocalAccounts();
-  const key = nameKey(name);
-  accounts[key] = { ...account, display: name };
-  saveLocalAccounts(accounts);
-}
-
-function removeLocalAccount(name) {
-  const accounts = getLocalAccounts();
-  const key = nameKey(name);
-  if (accounts[key]) {
-    delete accounts[key];
-    saveLocalAccounts(accounts);
-  }
-}
-
 async function readUsernameRecord(name) {
   const key = nameKey(name);
-  try {
-    const snap = await readDbValueWithTimeout('usernames/' + key);
-    if (snap.exists()) {
-      return { exists: true, value: snap.val(), source: 'firebase' };
-    }
-  } catch (err) {
-    console.warn('Firebase username lookup failed, using local fallback', err);
+  const snap = await readDbValueWithTimeout('usernames/' + key);
+  if (snap.exists()) {
+    return { exists: true, value: snap.val(), source: 'firebase' };
   }
-
-  const localAccount = getLocalAccount(name);
-  if (localAccount) {
-    return { exists: true, value: localAccount, source: 'local' };
-  }
-
-  return { exists: false, value: null, source: 'local' };
+  return { exists: false, value: null, source: 'firebase' };
 }
 
 // Pending state across the two-step auth flow
@@ -624,20 +579,20 @@ async function submitSetPassword() {
       return accountData;
     });
 
-    btn.disabled = false;
-
     if (taken) {
+      btn.disabled = false;
       errEl.textContent = 'That username was just taken. Try another.';
       setTimeout(backToUsername, 1500);
       return;
     }
+    
+    btn.disabled = false;
+    await finishLogin(pendingUsername);
   } catch (firebaseErr) {
-    console.warn('Firebase account creation failed, using local fallback', firebaseErr);
+    btn.disabled = false;
+    errEl.textContent = 'Network error. Please try again.';
+    console.error('Firebase account creation failed', firebaseErr);
   }
-
-  setLocalAccount(pendingUsername, accountData);
-  btn.disabled = false;
-  await finishLogin(pendingUsername);
 }
 
 // ── Step 2b: existing user logs in with password ──────────────────────────────
@@ -679,16 +634,13 @@ async function submitLogin() {
       await transferProfileToCurrentUser(previousPlayerId, myPlayerId, canonicalName);
     }
 
-    if (record.source === 'firebase') {
-      try {
-        const key = nameKey(canonicalName);
-        await db.ref('usernames/' + key).update({ playerId: myPlayerId, display: canonicalName });
-      } catch (firebaseErr) {
-        console.warn('Firebase ownership update failed, continuing with local fallback', firebaseErr);
-      }
+    try {
+      const key = nameKey(canonicalName);
+      await db.ref('usernames/' + key).update({ playerId: myPlayerId, display: canonicalName });
+    } catch (firebaseErr) {
+      console.warn('Firebase ownership update failed, but proceeding', firebaseErr);
     }
 
-    setLocalAccount(canonicalName, { playerId: myPlayerId, display: canonicalName, passwordHash: storedHash });
     btn.disabled = false;
     await finishLogin(canonicalName);
   } catch (err) {
@@ -711,9 +663,8 @@ async function finishLogin(name) {
         await db.ref('usernames/' + oldKey).remove();
       }
     } catch (err) {
-      console.warn('Could not remove old username from Firebase, keeping local fallback', err);
+      console.warn('Could not remove old username from Firebase', err);
     }
-    removeLocalAccount(myUsername);
   }
 
   // If upgrading from guest, write guest stats to the new profile
@@ -763,11 +714,8 @@ async function claimUsername(name, newHash, existingHash) {
     try {
       await db.ref('usernames/' + key).set({ playerId: myPlayerId, display: name, passwordHash: newHash });
     } catch (err) {
-      console.warn('Firebase username claim failed, using local fallback', err);
+      console.warn('Firebase username claim failed', err);
     }
-  }
-  if (newHash) {
-    setLocalAccount(name, { playerId: myPlayerId, display: name, passwordHash: newHash });
   }
   await finishLogin(name);
 }
@@ -822,16 +770,23 @@ function changeUsername() {
 }
 
 async function initLobby() {
+  localStorage.removeItem('ttt2_local_accounts'); // Clean up old legacy local accounts
   if (myUsername) {
     const key = nameKey(myUsername);
-    const snap = await db.ref('usernames/' + key).once('value');
-    if (snap.exists() && snap.val().playerId === myPlayerId) {
-      isGuest = false;
+    try {
+      const snap = await db.ref('usernames/' + key).once('value');
+      if (snap.exists() && snap.val().playerId === myPlayerId) {
+        isGuest = false;
+        showLobbyMain(myUsername);
+      } else {
+        myUsername = '';
+        localStorage.removeItem('ttt2_username');
+        setTimeout(() => document.getElementById('username-input').focus(), 100);
+      }
+    } catch (err) {
+      console.warn('Could not verify username in Firebase', err);
+      // Keep username if firebase is unreachable so we don't log them out on offline mode
       showLobbyMain(myUsername);
-    } else {
-      myUsername = '';
-      localStorage.removeItem('ttt2_username');
-      setTimeout(() => document.getElementById('username-input').focus(), 100);
     }
   } else {
     setTimeout(() => document.getElementById('username-input').focus(), 100);
@@ -865,14 +820,9 @@ async function transferProfileToCurrentUser(oldPlayerId, newPlayerId, displayNam
     };
 
     await db.ref('players/' + newPlayerId).set(migrated);
-    // Remove the old stale profile node if it is no longer referenced by the username.
-    if (oldSnap.exists() && oldPlayerId !== newPlayerId) {
-      const oldUsernameKey = nameKey(displayName || oldProfile.username || '');
-      const oldUsernameRec = await db.ref('usernames/' + oldUsernameKey).once('value');
-      if (!oldUsernameRec.exists() || oldUsernameRec.val().playerId !== oldPlayerId) {
-        await db.ref('players/' + oldPlayerId).remove();
-      }
-    }
+    // Note: Due to Firebase rules, we cannot delete the old profile node (auth.uid doesn't match oldPlayerId).
+    // It becomes an orphaned profile. Our leaderboard query filters out orphaned profiles
+    // by joining against the 'usernames' registry, so it won't appear.
     return migrated;
   } catch (err) {
     console.warn('Could not migrate profile to current player ID', err);
@@ -937,8 +887,9 @@ async function settleRating(roomData, winner) {
   let guestDelta = calcEloDelta(guestRatingStart, hostRatingStart, guestOutcome);
   if (winner === 'D' && ratingDiff < DRAW_DIFF_THRESH) { hostDelta = 0; guestDelta = 0; }
 
-  // Transaction: only ONE client writes to Firebase
-  const settledRef = roomRef.child('ratingSettled');
+  // Each client only updates its OWN rating because Firebase rules don't allow writing to opponent's profile.
+  // Use a per-player settled flag to prevent double-writes on reconnect.
+  const settledRef = roomRef.child('ratingSettled/' + myPlayerId);
   let didSettle = false;
   await settledRef.transaction(cur => {
     if (cur) return;
@@ -947,35 +898,37 @@ async function settleRating(roomData, winner) {
   });
 
   if (didSettle) {
-    const hostUpdates = {
-      rating: Math.max(0, hostRatingStart + hostDelta),
-      wins: (hostProf.wins || 0) + (hostOutcome === 1 ? 1 : 0),
-      losses: (hostProf.losses || 0) + (hostOutcome === 0 ? 1 : 0),
-      draws: (hostProf.draws || 0) + (hostOutcome === 0.5 ? 1 : 0),
-      username: roomData.usernameHost || ''
-    };
-    const guestUpdates = {
-      rating: Math.max(0, guestRatingStart + guestDelta),
-      wins: (guestProf.wins || 0) + (guestOutcome === 1 ? 1 : 0),
-      losses: (guestProf.losses || 0) + (guestOutcome === 0 ? 1 : 0),
-      draws: (guestProf.draws || 0) + (guestOutcome === 0.5 ? 1 : 0),
-      username: roomData.usernameGuest || ''
-    };
-
-    // Update guest in-memory stats
-    if (myPlayerId === hostId && hostIsGuest) {
-      guestStats = { ...hostUpdates };
-      sessionStorage.setItem('ttt2_guest_stats', JSON.stringify(guestStats));
-    } else if (myPlayerId === guestId && guestIsGuest) {
-      guestStats = { ...guestUpdates };
-      sessionStorage.setItem('ttt2_guest_stats', JSON.stringify(guestStats));
+    if (myPlayerId === hostId) {
+      const hostProf = hostIsGuest ? { wins: 0, losses: 0, draws: 0 } : (await loadProfile(hostId));
+      const hostUpdates = {
+        rating: Math.max(0, hostRatingStart + hostDelta),
+        wins: (hostProf.wins || 0) + (hostOutcome === 1 ? 1 : 0),
+        losses: (hostProf.losses || 0) + (hostOutcome === 0 ? 1 : 0),
+        draws: (hostProf.draws || 0) + (hostOutcome === 0.5 ? 1 : 0),
+        username: roomData.usernameHost || ''
+      };
+      if (hostIsGuest) {
+        guestStats = { ...hostUpdates };
+        sessionStorage.setItem('ttt2_guest_stats', JSON.stringify(guestStats));
+      } else {
+        await db.ref('players/' + hostId).update(hostUpdates);
+      }
+    } else if (myPlayerId === guestId) {
+      const guestProf = guestIsGuest ? { wins: 0, losses: 0, draws: 0 } : (await loadProfile(guestId));
+      const guestUpdates = {
+        rating: Math.max(0, guestRatingStart + guestDelta),
+        wins: (guestProf.wins || 0) + (guestOutcome === 1 ? 1 : 0),
+        losses: (guestProf.losses || 0) + (guestOutcome === 0 ? 1 : 0),
+        draws: (guestProf.draws || 0) + (guestOutcome === 0.5 ? 1 : 0),
+        username: roomData.usernameGuest || ''
+      };
+      if (guestIsGuest) {
+        guestStats = { ...guestUpdates };
+        sessionStorage.setItem('ttt2_guest_stats', JSON.stringify(guestStats));
+      } else {
+        await db.ref('players/' + guestId).update(guestUpdates);
+      }
     }
-
-    // Write to Firebase only for non-guest players
-    const writes = [];
-    if (!hostIsGuest) writes.push(db.ref('players/' + hostId).update(hostUpdates));
-    if (!guestIsGuest) writes.push(db.ref('players/' + guestId).update(guestUpdates));
-    if (writes.length) await Promise.all(writes);
   }
 
   // Both players return their own delta regardless of who wrote
@@ -1050,43 +1003,43 @@ async function fetchLeaderboard() {
   ]);
   if (!playersSnap.exists()) { listEl.innerHTML = '<div class="lb-loading">No players yet.</div>'; return; }
 
+  const validPlayerIds = new Set();
   const displayNames = {};
-  usernamesSnap.forEach(child => {
-    const data = child.val() || {};
-    if (data.playerId) displayNames[data.playerId] = normalizeDisplayName(data.display || data.username || '');
-  });
+  if (usernamesSnap.exists()) {
+    usernamesSnap.forEach(child => {
+      const data = child.val() || {};
+      if (data.playerId) {
+        validPlayerIds.add(data.playerId);
+        displayNames[data.playerId] = normalizeDisplayName(data.display || data.username || '');
+      }
+    });
+  }
 
   const rows = [];
   playersSnap.forEach(child => {
     const val = child.val();
-    // Only show players who have played at least one rated game
-    if (val.wins || val.losses || val.draws) rows.push({ id: child.key, ...val, displayName: displayNames[child.key] || normalizeDisplayName(val.username || '') });
+    const pid = child.key;
+    // Only show profiles that are associated with an active username, meaning they aren't orphaned,
+    // and have played at least one rated game.
+    if (validPlayerIds.has(pid) && (val.wins || val.losses || val.draws)) {
+      rows.push({
+        id: pid,
+        ...val,
+        displayName: displayNames[pid] || normalizeDisplayName(val.username || ''),
+        isMe: pid === myPlayerId
+      });
+    }
   });
+  
   if (rows.length === 0) { listEl.innerHTML = '<div class="lb-loading">No rated games played yet.</div>'; return; }
 
-  // Deduplicate accidental duplicate display names caused by stale profiles.
-  const deduped = new Map();
-  rows.forEach(row => {
-    const key = (row.displayName || row.username || row.id || '').toLowerCase();
-    if (!deduped.has(key)) {
-      deduped.set(key, { ...row, isMe: row.id === myPlayerId });
-      return;
-    }
-    const existing = deduped.get(key);
-    existing.wins = (existing.wins || 0) + (row.wins || 0);
-    existing.losses = (existing.losses || 0) + (row.losses || 0);
-    existing.draws = (existing.draws || 0) + (row.draws || 0);
-    existing.rating = Math.max(existing.rating || 0, row.rating || 0);
-    existing.isMe = existing.isMe || row.id === myPlayerId;
-  });
-
-  const dedupedRows = Array.from(deduped.values());
-  dedupedRows.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-  const top10 = dedupedRows.slice(0, 10);
+  // Now simply sort without additive dedup (orphaned stale profiles are filtered out above)
+  rows.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  const top10 = rows.slice(0, 10);
   listEl.innerHTML = '';
   top10.forEach((p, i) => {
     const rank = i + 1;
-    const isMe = p.id === myPlayerId;
+    const isMe = p.isMe;
     const rankCls = rank === 1 ? 'top1' : rank === 2 ? 'top2' : rank === 3 ? 'top3' : '';
     const row = document.createElement('div');
     row.className = 'lb-row' + (isMe ? ' me' : '');
@@ -1970,18 +1923,25 @@ async function startOnlineGame() {
       const amHost = rsData.hostId === myPlayerId;
       if (amHost) {
         await roomRef.child('creatorPlayer').set(newCreator);
+        if (rsData.ranked) {
+          // Update room ratings with the current post-game cached values
+          // This ensures the next settleRating uses correct starting values
+          await roomRef.update({
+            hostRating: amHost ? myGameRating : oppGameRating,
+            guestRating: amHost ? oppGameRating : myGameRating
+          });
+        }
       }
 
-      // Also update cached ratings to match new creatorPlayer
-      // hSeat = newCreator, so host's rating now belongs to newCreator card
-      const hProf = await loadProfile(rsData.hostId || myPlayerId);
-      const gProf = await loadProfile(rsData.guestId || myPlayerId);
-      myGameRating = amHost ? hProf.rating : gProf.rating;
-      oppGameRating = amHost ? gProf.rating : hProf.rating;
+      // No need to load profiles from Firebase — myGameRating/oppGameRating are already
+      // up-to-date and accurate from showInstantDelta.
+      // We just need to swap them to match the seat swap if we want them tied to seats,
+      // but myGameRating/oppGameRating are tied to PLAYERS, not SEATS, so they don't change.
 
       await roomRef.child('ready').remove();
       await roomRef.child('forfeit').remove();
-      await roomRef.child('ratingSettled').remove();
+      // Use amHost so only one client removes it to avoid race
+      if (amHost) await roomRef.child('ratingSettled').remove();
       await roomRef.child('game').set(serializeGame(initialGameState()));
       return;
     }
