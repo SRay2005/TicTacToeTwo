@@ -585,7 +585,7 @@ async function submitSetPassword() {
       setTimeout(backToUsername, 1500);
       return;
     }
-    
+
     btn.disabled = false;
     await finishLogin(pendingUsername);
   } catch (firebaseErr) {
@@ -1030,7 +1030,7 @@ async function fetchLeaderboard() {
       });
     }
   });
-  
+
   if (rows.length === 0) { listEl.innerHTML = '<div class="lb-loading">No rated games played yet.</div>'; return; }
 
   // Now simply sort without additive dedup (orphaned stale profiles are filtered out above)
@@ -1459,7 +1459,7 @@ async function quickMatch() {
       return { roomId: myRoomId, sessionId: mySessionId, playerId: myPlayerId, ts: Date.now() };
     } else if (current.playerId === myPlayerId) {
       // It's our own stale room (e.g. from another tab) - just keep it there
-      return; 
+      return;
     } else {
       // Someone else is waiting — grab their room and clear the slot
       theirRoomId = current.roomId;
