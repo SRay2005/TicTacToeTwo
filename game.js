@@ -1456,9 +1456,12 @@ async function quickMatch() {
   const txRes = await pendingRef.transaction(current => {
     if (current === null) {
       // Nobody waiting — advertise our room
-      return { roomId: myRoomId, sessionId: mySessionId, ts: Date.now() };
+      return { roomId: myRoomId, sessionId: mySessionId, playerId: myPlayerId, ts: Date.now() };
+    } else if (current.playerId === myPlayerId) {
+      // It's our own stale room (e.g. from another tab) - just keep it there
+      return; 
     } else {
-      // Someone is waiting — grab their room and clear the slot
+      // Someone else is waiting — grab their room and clear the slot
       theirRoomId = current.roomId;
       return null;
     }
@@ -1470,7 +1473,8 @@ async function quickMatch() {
     // A concurrent write happened; try one more time to avoid leaving both clients
     // thinking they advertised but neither succeeded.
     const retryRes = await pendingRef.transaction(current => {
-      if (current === null) return { roomId: myRoomId, sessionId: mySessionId, ts: Date.now() };
+      if (current === null) return { roomId: myRoomId, sessionId: mySessionId, playerId: myPlayerId, ts: Date.now() };
+      if (current.playerId === myPlayerId) return;
       theirRoomId = current.roomId; return null;
     });
     console.debug('matchmaking retry result:', retryRes && retryRes.committed, 'theirRoomId=', theirRoomId, 'pending=', retryRes && retryRes.snapshot && retryRes.snapshot.val());

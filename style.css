@@ -10,7 +10,7 @@
   --won-o: rgba(77,170,255,0.13);
   --text: #e8e8e8;
   --muted: #888;
-  --cell-size: 44px;
+  --cell-size: clamp(24px, 5.5vh, 44px);
   --bg-tint: transparent;
 }
 
@@ -428,7 +428,7 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 /* ── Game Layout ─────────────────────────────────────────────────────────── */
 #game-screen {
   width: 100%; display: flex; flex-direction: column; align-items: center;
-  position: relative; z-index: 1;
+  position: relative; z-index: 1; flex: 1;
 }
 
 .game-layout {
@@ -441,7 +441,7 @@ button:hover { border-color: var(--text); color: var(--text); background: #1e1e1
 
 /* Desktop: side-by-side */
 @media (min-width: 900px) {
-  #game-screen { justify-content: center; min-height: 100vh; }
+  #game-screen { justify-content: center; }
 
   .game-layout {
     flex-direction: row;
