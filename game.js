@@ -862,7 +862,7 @@ async function settleRating(roomData, winner) {
   if (!roomData || !roomData.ranked) return null;
   const hostId = roomData.hostId;
   const guestId = roomData.guestId;
-  if (!hostId || !guestId) return null;
+  if (!hostId || !guestId || hostId === guestId) return null;
 
   const hostSeat = roomData.creatorPlayer || 'X';
   const guestSeat = hostSeat === 'X' ? 'O' : 'X';
@@ -1733,8 +1733,9 @@ async function startOnlineGame() {
   const roomSnap = await roomRef.once('value');
   const rdata = roomSnap.val() || {};
 
-  // Always sync isRanked from the room data — single source of truth
-  isRanked = rdata.ranked === true;
+  // Always sync isRanked from the room data — single source of truth.
+  // Disable ranking entirely if playing against yourself (same Firebase Auth UID).
+  isRanked = rdata.ranked === true && rdata.hostId !== rdata.guestId;
 
   const hostUser = rdata.usernameHost || 'Unknown';
   const guestUser = rdata.usernameGuest || 'Unknown';
